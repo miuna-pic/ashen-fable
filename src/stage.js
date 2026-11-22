@@ -234,7 +234,7 @@ export function createStage(canvas) {
     const c = portrait ? TALL : CAM; camera.fov = c.fov; camera.updateProjectionMatrix();
     const hud = document.getElementById('flip')?.getBoundingClientRect(), limit = (hud && hud.height ? hud.top : h) - 6;
     let d = Math.max(c.dist, c.wide / (w / h));
-    const clear = () => { cine(c, d, 0); return (1 - edge.set(0, 0, H / 2).project(camera).y) / 2 * h <= limit; };
+    const clear = () => { cine(c, d, 0); return (1 - edge.set(0, 0, H / 2 + .66).project(camera).y) / 2 * h <= limit; };   // the near edge of the full frame's gold trim, not of the squares
     for (lift = 0; lift < 3 && !clear(); lift += .25);
     for (; d < 40 && !clear(); d += .25);
     camera.userData.base = d; cine(c, d, 0);
