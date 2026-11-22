@@ -119,7 +119,8 @@ body.night .after img { background: #efe6d6; }
 dialog { margin: auto; width: min(980px, 94vw); max-height: 90dvh; overflow: auto; padding: 26px 30px 30px; color: #1a0e14; background: #f3ead9; border: 0; box-shadow: 14px 14px 0 #c4122f; }
 dialog::backdrop { background: rgba(8, 4, 10, .78); }
 dialog h2 { font-weight: 900; font-size: 30px; letter-spacing: .14em; margin: 4px 0 12px; transform: skewX(-8deg); } dialog h2::after { content: ''; display: block; width: 64px; height: 6px; margin-top: 4px; background: #c4122f; }
-.close { position: sticky; float: right; top: 0; width: 42px; height: 42px; font-size: 28px; font-weight: 900; background: #1a0e14; color: #f3ead9; z-index: 2; }
+dialog form { position: sticky; top: 0; height: 0; z-index: 2; }
+.close { float: right; width: 42px; height: 42px; font-size: 28px; font-weight: 900; background: #1a0e14; color: #f3ead9; z-index: 2; }
 .rule-list { padding-left: 1.4em; margin-bottom: 22px; font-size: 15px; line-height: 1.85; } .rule-list b { font-weight: 900; color: #b3122d; }
 .roster { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
 .roster article { position: relative; display: grid; grid-template-columns: 1fr 1fr; border: 2px solid #1a0e14; }

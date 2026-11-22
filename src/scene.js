@@ -343,18 +343,37 @@ export async function createScene(canvas, { onPick, onHover }) {
 
   // ── 拾取 ──
   const ray = new T.Raycaster(), ptr = new T.Vector2();
+  // 立绘透明的部分不算点中，这样才能点到被前排挡住的角色
+  const alphaMaps = new WeakMap();
+  function solid(hit) {
+    const o = hit.object, img = o.material.map?.image;
+    if (!o.visible) return false;
+    if (!img || !hit.uv || !img.width) return true;
+    let a = alphaMaps.get(img);
+    if (!a) {
+      const c = document.createElement('canvas'); c.width = 64; c.height = 128;
+      const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0, 64, 128);
+      a = g.getImageData(0, 0, 64, 128).data; alphaMaps.set(img, a);
+    }
+    const x = Math.min(63, Math.floor(hit.uv.x * 64)), y = Math.min(127, Math.floor((1 - hit.uv.y) * 128));
+    return a[(y * 64 + x) * 4 + 3] > 60;
+  }
   function cellAt(ev) {
     const r = canvas.getBoundingClientRect();
     ptr.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
     ray.setFromCamera(ptr, camera);
-    // 先看立牌，再看格子：点角色的身体也算点中她脚下的格子
+    // 可落子的格子和站着棋子的格子优先；其次才是立牌的身体（点她也算点中她脚下的格子）
     let best = null;
     for (const p of pieces.values()) {
-      const hit = ray.intersectObject(p.root, true)[0];
+      const hit = ray.intersectObject(p.root, true).find(solid);
       if (hit && (!best || hit.distance < best.d)) best = { d: hit.distance, cell: p.cell };
     }
     const tile = ray.intersectObjects(tiles)[0];
-    if (tile && marks[tile.object.userData.cell].visible) return tile.object.userData.cell;
+    if (tile) {
+      const cell = tile.object.userData.cell;
+      if (marks[cell].visible) return cell;
+      for (const p of pieces.values()) if (p.cell === cell) return cell;
+    }
     if (best) return best.cell;
     return tile ? tile.object.userData.cell : -1;
   }
