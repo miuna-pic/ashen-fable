@@ -186,7 +186,9 @@ function aim(e) {
   const moves = allowed(), legal = (s) => moves.some((m) => m.to === s);
   const ground = stage.pick(e.clientX, e.clientY), body = stage.pickPiece(e.clientX, e.clientY, face);
   // a figure standing on a legal square is meant when the point is on that square, even where a nearer figure is drawn across it
-  if (body >= 0 && (legal(body) || !legal(ground)) && !(body !== ground && legal(ground) && enemyAt(st, face, ground))) return body;
+  // nor does a figure's reach claim an open square two ranks past its feet: the drawing ends before that square's middle
+  const past = body >= 0 && legal(ground) && Math.abs(Math.floor(ground / W) - Math.floor(body / W)) > 1;
+  if (body >= 0 && !past && (legal(body) || !legal(ground)) && !(body !== ground && legal(ground) && enemyAt(st, face, ground))) return body;
   // a figure hanging under the glass is drawn across more than its own square: where no move can be made, a finger on it means that figure
   const open = legal(ground) || movesX(st, face).some((m) => m.to === ground);
   const under = body < 0 && !open ? stage.pickPiece(e.clientX, e.clientY, 1 - face) : -1;
