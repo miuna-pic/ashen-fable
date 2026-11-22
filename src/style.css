@@ -8,6 +8,7 @@ i { font-style: normal; }
 .hud { position: fixed; left: 0; right: 0; display: flex; justify-content: space-between; align-items: flex-start; padding: max(14px, env(safe-area-inset-top)) clamp(14px, 3vw, 40px); pointer-events: none; transition: color .6s; z-index: 2; }
 .hud > * { pointer-events: auto; }
 .top { top: 0; }
+.top > * { pointer-events: none; }   /* labels only: taps go through to the board behind them */
 .chapter b { display: inline-block; font-weight: 900; font-size: clamp(11px, 1.2vw, 15px); letter-spacing: .5em; background: var(--fg); color: var(--paper); padding: 3px 4px 3px 10px; }
 body.mirror .chapter b { color: #14080d; }
 .chapter h2 { font-weight: 900; font-size: clamp(38px, 6.4vw, 92px); line-height: .95; letter-spacing: -.04em; margin-top: 6px; transform: scaleY(1.18); transform-origin: top left; }
