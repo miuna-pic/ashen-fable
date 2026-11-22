@@ -185,7 +185,8 @@ $('#chips').addEventListener('click', (e) => { if (locked || !e.target.closest('
 function aim(e) {
   const moves = allowed(), legal = (s) => moves.some((m) => m.to === s);
   const ground = stage.pick(e.clientX, e.clientY), body = stage.pickPiece(e.clientX, e.clientY, face);
-  if (body >= 0 && (legal(body) || !legal(ground))) return body;
+  // a figure standing on a legal square is meant when the point is on that square, even where a nearer figure is drawn across it
+  if (body >= 0 && (legal(body) || !legal(ground)) && !(body !== ground && legal(ground) && enemyAt(st, face, ground))) return body;
   // a figure hanging under the glass is drawn across more than its own square: where no move can be made, a finger on it means that figure
   const open = legal(ground) || movesX(st, face).some((m) => m.to === ground);
   const under = body < 0 && !open ? stage.pickPiece(e.clientX, e.clientY, 1 - face) : -1;
