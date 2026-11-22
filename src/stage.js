@@ -195,7 +195,7 @@ export function createStage(canvas) {
       const p = g.position, l = g.userData.h * view.scale, far = face !== flipped, lean = far ? -view.lean - .1 : view.lean, z = p.z + g.userData.tilt.position.z;   // a far-face figure hangs toward the camera, set back
       const [ax, ay] = toScreen(p.x, 0, z), [bx, by] = toScreen(p.x, (face ? -1 : 1) * l * Math.cos(lean), z - l * Math.sin(lean));
       const dx = bx - ax, dy = by - ay, k = ((cx - ax) * dx + (cy - ay) * dy) / (dx * dx + dy * dy || 1);
-      if (k < (far ? 0 : .15) || k > 1 || Math.hypot(cx - ax - dx * k, cy - ay - dy * k) > view.tile * .3 || p.z < depth) continue;
+      if (k < (far ? 0 : .15) || k > 1 || Math.hypot(cx - ax - dx * k, cy - ay - dy * k) > view.tile * (far ? .2 : .3) || p.z < depth) continue;   // a far figure claims a narrower strip, leaving the squares it crosses room to be tapped
       depth = p.z; found = Math.round(p.z + (H - 1) / 2) * W + Math.round(p.x + (W - 1) / 2);
     }
     return found;
