@@ -84,6 +84,17 @@ test('third occurrence draws only when pieces, side and pending echo match', () 
   assert.deepEqual(current.result,{winner:null,reason:'repeat'});
 });
 
+test('identical echo footprints count as the same position despite different origins', () => {
+  const first = state([ashKing,thornKing,piece('ash','wolf',0),piece('ash','nun',7)]);
+  const occurrence = play(first,0,10);
+  assert.deepEqual(occurrence.echo.tiles,[0,1]);
+  const past = occurrence.history.at(-1);
+  const alternate = state([ashKing,thornKing,piece('ash','wolf',10),piece('ash','nun',1)],{history:[past,past]});
+  const repeat = play(alternate,1,7);
+  assert.deepEqual(repeat.echo.tiles,[1,0]);
+  assert.deepEqual(repeat.result,{winner:null,reason:'repeat'});
+});
+
 test('the automaton only picks legal actions and self-play terminates', () => {
   let current=start();
   while(!current.result) {

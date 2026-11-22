@@ -61,7 +61,7 @@ export function echoFor(from, to, side) {
 
 function positionKey(state) {
   const figures = state.pieces.map(({ id, at }) => id + at).sort().join(',');
-  const echo = state.echo?.tiles.join(',') ?? '';
+  const echo = state.echo ? [...state.echo.tiles].sort((a,b) => a-b).join(',') : '';
   return state.side + '|' + figures + '|' + echo;
 }
 
