@@ -225,25 +225,30 @@ export function createScenery(world) {
     const g = new T.ExtrudeGeometry(s, { depth, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 3, curveSegments: 6 });
     g.translate(0, 0, -depth / 2); g.rotateX(Math.PI / 2); return g;
   };
+  // Two frames: the full one, and a slim one for windows where every pixel beside the squares is spoken for.
+  const buildFrame = (o, t0, t1, fin, sc) => {
   const frame = new T.Group(); world.add(frame);
-  frame.add(new T.Mesh(ring(W / 2 + .46, H / 2 + .46, W / 2 + .1, H / 2 + .1, .1, .05, .16), metal));
-  frame.add(new T.Mesh(ring(W / 2 + .62, H / 2 + .62, W / 2 + .5, H / 2 + .5, .02, .025, .22), trim));
+  frame.add(new T.Mesh(ring(W / 2 + o, H / 2 + o, W / 2 + .1, H / 2 + .1, .1, .05, .16), metal));
+  frame.add(new T.Mesh(ring(W / 2 + t1, H / 2 + t1, W / 2 + t0, H / 2 + t0, .02, .025, .22), trim));
   const prof = [[0, 0], [.17, 0], [.19, .04], [.12, .08], [.08, .13], [.14, .19], [.15, .25], [.09, .31], [.05, .36], [.1, .42], [.1, .47], [0, .54]].map(([x, y]) => new T.Vector2(x, y));
   const finial = new T.LatheGeometry(prof, 20), thorn = new T.ConeGeometry(.13, .9, 5).translate(0, -.45, 0);
   const gemA = new T.MeshBasicMaterial({ color: '#bfe0ff', toneMapped: false }), gemB = new T.MeshBasicMaterial({ color: '#ff2038', toneMapped: false });
   const gem = new T.OctahedronGeometry(.085);
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-    const x = sx * (W / 2 + .3), z = sz * (H / 2 + .3);
-    const a = new T.Mesh(finial, trim); a.position.set(x, .09, z); frame.add(a);
+    const x = sx * (W / 2 + fin), z = sz * (H / 2 + fin);
+    const a = new T.Mesh(finial, trim); a.position.set(x, .09, z); a.scale.setScalar(sc); frame.add(a);
     for (let i = 0; i < 3; i++) { const b = new T.Mesh(thorn, metal); b.position.set(x + sx * i * .05, -.08, z + sz * i * .05); b.rotation.set(sz * i * .5, i * 1.3, -sx * i * .5); b.scale.setScalar(1 - i * .22); frame.add(b); }
-    const ga = new T.Mesh(gem, gemA); ga.position.set(x, .7, z); const gb = new T.Mesh(gem, gemB); gb.position.set(x, -1.02, z); frame.add(ga, gb);
+    const ga = new T.Mesh(gem, gemA); ga.position.set(x, .09 + .61 * sc, z); const gb = new T.Mesh(gem, gemB); gb.position.set(x, -1.02, z); frame.add(ga, gb);
   }
   for (let i = 0; i < W + H; i++) for (const s of [-1, 1]) {   // a stud beside every tile line
     const along = i < W, k = along ? i - W / 2 + .5 : i - W - H / 2 + .5;
     const m = new T.Mesh(gem, gemA), n = new T.Mesh(gem, gemB);
-    const x = along ? k : s * (W / 2 + .3), z = along ? s * (H / 2 + .3) : k;
+    const x = along ? k : s * (W / 2 + fin), z = along ? s * (H / 2 + fin) : k;
     m.position.set(x, .105, z); n.position.set(x, -.105, z); m.scale.set(.6, .35, .6); n.scale.set(.6, .35, .6); frame.add(m, n);
   }
+  return frame; };
+  const frames = [buildFrame(.46, .5, .62, .3, 1), buildFrame(.26, .29, .36, .18, .7)]; frames[1].visible = false;
+  out.setSlim = (on) => { frames[0].visible = !on; frames[1].visible = on; };
   out.metal = metal;
 
   // A clock the size of a moon, half sunk in the horizon: gold dust above the glass, an open wound beneath it.

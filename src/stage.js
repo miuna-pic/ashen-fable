@@ -100,7 +100,7 @@ export function createStage(canvas) {
   }
   // Whoever hangs in the far world is drawn over the glass with the see-through material.
   function order(face) {
-    for (const g of [...pieces.values(), ...corpses, ...(alice || [])]) { const near = g.userData.face === face; const u = g.userData; u.body.material = near ? u.here : u.far; u.body.renderOrder = near ? 0 : -2.5; u.shade.visible = near; }
+    for (const g of [...pieces.values(), ...corpses, ...(alice || [])]) { const near = g.userData.face === face; const u = g.userData; u.body.material = near ? u.here : u.far; u.body.renderOrder = near ? 0 : -2.5; u.shade.visible = near; restyle(g); }
     marks.forEach((m, side) => { m.visible = side === face; });
   }
   let alice = null, corpses = [], flipped = 0, state = null, busy = 0;
@@ -243,19 +243,21 @@ export function createStage(canvas) {
     for (let p = .44; p < 1.08; p += .04) { view.pitch = p; const f = frameAt(s, w, h); f.score = f.far * Math.min(1, f.deep / DEEP) * (1 - .15 * Math.max(0, p - .52)); if (!best || f.score > best.score) best = f; }
     return best;
   }
+  const TRIM = .4;   // how far the slim frame reaches past the squares
   function frameAt(s, w, h) {
     const fw = Math.max(120, w - s.l - s.r), fh = Math.max(120, h - s.t - s.b), head = 1.7 * view.scale;
-    const pts = []; for (const x of [-1, 1]) pts.push([x * (W / 2 + .15), 0, H / 2 + .15], [x * (W / 2 + .15), 0, -H / 2 - .15], [x * (W / 2 + .2), head, -H / 2 + .5], [x * W / 2, -.7, H / 2 - .5]);
+    const pts = []; for (const x of [-1, 1]) pts.push([x * (W / 2 + TRIM), 0, H / 2 + TRIM], [x * (W / 2 + TRIM), 0, -H / 2 - TRIM], [x * (W / 2 + .2), head, -H / 2 + .5], [x * W / 2, -.7, H / 2 - .5]);
     const box = (d) => { pose(d); let x0 = 9, x1 = -9, y0 = 9, y1 = -9; for (const p of pts) { projected.set(...p).project(camera); x0 = Math.min(x0, projected.x); x1 = Math.max(x1, projected.x); y0 = Math.min(y0, projected.y); y1 = Math.max(y1, projected.y); } return { x0, x1, y0, y1 }; };
     let lo = 3, hi = 90; for (let i = 0; i < 24; i++) { const d = (lo + hi) / 2, b = box(d); if ((b.x1 - b.x0) / 2 * w <= fw && (b.y1 - b.y0) / 2 * h <= fh) hi = d; else lo = d; }
     const b = box(hi);
     return { pitch: view.pitch, d: hi, tile: tileAt(0, w, h), far: tileAt(.5 - H / 2, w, h), deep: px(0, 0, 1 - H / 2, w, h)[1] - px(0, 0, -H / 2, w, h)[1], ox: (b.x0 + b.x1) / 4 * w - (s.l + fw / 2 - w / 2), oy: -(b.y0 + b.y1) / 4 * h - (s.t + fh / 2 - h / 2) };
   }
-  const restyle = (g) => { if (g.userData.flat) return; g.userData.tilt.rotation.x = .16 - view.lean; g.userData.tilt.scale.setScalar(view.scale); };
+  // A figure leans back to face a steep camera. One hanging in the far world has to lean the other way, or it is seen edge-on.
+  const restyle = (g) => { if (g.userData.flat) return; g.userData.tilt.rotation.x = .16 - (g.userData.face === flipped ? view.lean : -view.lean - .1); g.userData.tilt.scale.setScalar(view.scale); };
   function fit() {
     const w = canvas.clientWidth, h = canvas.clientHeight; if (!w || !h) return;
     camera.clearViewOffset(); camera.aspect = w / h; portrait = w / h < .8;
-    const c = frameCine(w, h); view.fit = !c.ok; let f = c;
+    const c = frameCine(w, h); view.fit = !c.ok; let f = c; scenery.setSlim(view.fit);
     if (view.fit) {
       for (const s of view.safe) { const g = frameIn(s, w, h); g.score *= s.weight || 1; if (f === c || g.score > f.score) f = g; }
       view.d = f.d; view.pitch = f.pitch; camera.setViewOffset(w, h, f.ox, f.oy, w, h); pose(f.d);
