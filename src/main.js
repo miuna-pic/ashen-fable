@@ -186,6 +186,9 @@ function aim(e) {
   const moves = allowed(), legal = (s) => moves.some((m) => m.to === s);
   const ground = stage.pick(e.clientX, e.clientY), body = stage.pickPiece(e.clientX, e.clientY, face);
   if (body >= 0 && (legal(body) || !legal(ground))) return body;
+  // a figure hanging under the glass is drawn across more than its own square: a finger on it means that square, not the one it covers
+  const under = body < 0 ? stage.pickPiece(e.clientX, e.clientY, 1 - face) : -1;
+  if (under >= 0) return under;
   // a square the rules allow but the coach does not is meant as itself, never snapped onto the scripted one
   if (ground >= 0 && (legal(ground) || movesX(st, face).some((m) => m.to === ground) || ground === st.alice || st.corpses.includes(ground) || enemyAt(st, face, ground) || enemyAt(st, 1 - face, ground))) return ground;
   if (e.pointerType === 'mouse') return ground;

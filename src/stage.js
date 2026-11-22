@@ -193,9 +193,10 @@ export function createStage(canvas) {
     let found = -1, depth = -1e9;
     for (const g of pieces.values()) {
       if (!g.visible || g.userData.face !== face) continue;
-      const p = g.position, l = g.userData.h * view.scale, [ax, ay] = toScreen(p.x, 0, p.z), [bx, by] = toScreen(p.x, (face ? -1 : 1) * l * Math.cos(view.lean), p.z - l * Math.sin(view.lean));
+      const p = g.position, l = g.userData.h * view.scale, far = face !== flipped, lean = far ? -view.lean - .1 : view.lean, z = p.z + g.userData.tilt.position.z;   // a far-face figure hangs toward the camera, set back
+      const [ax, ay] = toScreen(p.x, 0, z), [bx, by] = toScreen(p.x, (face ? -1 : 1) * l * Math.cos(lean), z - l * Math.sin(lean));
       const dx = bx - ax, dy = by - ay, k = ((cx - ax) * dx + (cy - ay) * dy) / (dx * dx + dy * dy || 1);
-      if (k < .15 || k > 1 || Math.hypot(cx - ax - dx * k, cy - ay - dy * k) > view.tile * .3 || p.z < depth) continue;
+      if (k < (far ? 0 : .15) || k > 1 || Math.hypot(cx - ax - dx * k, cy - ay - dy * k) > view.tile * (far ? .2 : .3) || p.z < depth) continue;   // a far figure claims a narrower strip, leaving the squares it crosses room to be tapped
       depth = p.z; found = Math.round(p.z + (H - 1) / 2) * W + Math.round(p.x + (W - 1) / 2);
     }
     return found;
@@ -254,7 +255,13 @@ export function createStage(canvas) {
     return { pitch: view.pitch, d: hi, tile: tileAt(0, w, h), far: tileAt(.5 - H / 2, w, h), deep: px(0, 0, 1 - H / 2, w, h)[1] - px(0, 0, -H / 2, w, h)[1], ox: (b.x0 + b.x1) / 4 * w - (s.l + fw / 2 - w / 2), oy: -(b.y0 + b.y1) / 4 * h - (s.t + fh / 2 - h / 2) };
   }
   // A figure leans back to face a steep camera. One hanging in the far world has to lean the other way, or it is seen edge-on.
-  const restyle = (g) => { if (g.userData.flat) return; g.userData.tilt.rotation.x = .16 - (g.userData.face === flipped ? view.lean : -view.lean - .1); g.userData.tilt.scale.setScalar(view.scale); };
+  // seen through the glass it would lie across the row in front, so it is set back by half its own length to sit over its square
+  const restyle = (g) => {
+    const u = g.userData; if (u.flat) return;
+    const near = u.face === flipped, a = view.lean + .1;
+    u.tilt.rotation.x = .16 - (near ? view.lean : -a); u.tilt.scale.setScalar(view.scale);
+    u.tilt.position.z = near ? 0 : -u.h * view.scale * (Math.sin(a) + Math.cos(a) / Math.tan(view.pitch)) / 2;
+  };
   function fit() {
     const w = canvas.clientWidth, h = canvas.clientHeight; if (!w || !h) return;
     camera.clearViewOffset(); camera.aspect = w / h; portrait = w / h < .8;
