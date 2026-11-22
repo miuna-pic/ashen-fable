@@ -123,3 +123,11 @@ test('凯伦真的撞上人鱼时，人鱼失去两点声', () => {
   assert.equal(r.state.voice, R.VOICE - 2);
   assert.equal(r.events.find((e) => e.t === 'bump').id, 'mermaid');
 });
+
+test('结冰预告在镜片行动后依然成立：被占住就不冻，不会改冻别处', () => {
+  const s0 = R.start();
+  const predicted = R.frostNext(s0);
+  const r = act(s0, 'mermaid', 'move', R.idx(1, 3));
+  const frozen = r.events.filter((e) => e.t === 'freeze').flatMap((e) => e.tiles);
+  for (const i of frozen) assert.ok(predicted.includes(i), `tile ${i} froze without being forecast`);
+});

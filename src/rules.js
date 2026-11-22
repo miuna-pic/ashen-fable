@@ -246,6 +246,7 @@ function enemyTurn(s, ev) {
   const girl = piece(s, 'match');
   const shards = s.pieces.filter((p) => p.kind === 'shard');
   const want = 2 + (QUEEN_HP - s.queenHp);
+  const forecast = frostNext(s); // 结冰位置在镜片行动前就定下，和棋盘上的预告一致
   let best = null;
   for (const sh of shards) {
     for (const [dx, dy] of KNIGHT) {
@@ -299,7 +300,7 @@ function enemyTurn(s, ev) {
   s.spawnWait--;
   if (s.result) return;
 
-  const frozen = frostNext(s);
+  const frozen = forecast.filter((i) => !pieceAt(s, i) && !isLit(s, i));
   if (frozen.length) { for (const i of frozen) s.ice[i] = true; ev.push({ t: 'freeze', tiles: frozen }); }
 
   const out = [];
