@@ -100,6 +100,6 @@ $('#hint').onclick = () => {
   if (path[0].face !== face) { toast('白兔：先翻面。'); $('#flip').classList.remove('nudge'); void $('#flip').offsetWidth; $('#flip').classList.add('nudge'); return; }
   hint = path[0].to; toast(`白兔：最快还要 ${path.length} 步。`); hud();
 };
-$('#begin').onclick = async () => { audio.start(); $('#title').classList.add('gone'); await enter(new URLSearchParams(location.search).get('level') | 0); };
+$('#begin').onclick = async () => { audio.start(); $('#title').classList.add('gone'); const n = new URLSearchParams(location.search).get('level') | 0; await enter(n >= 0 && n < LEVELS.length ? n : 0); };
 st = parseLevel(LEVELS[0]); stage.load(st); hud();
 if (import.meta.env.DEV) window.__game = { get st() { return st; }, get idle() { return !locked && !stage.busy; }, get face() { return face; }, enter, flip, move };
