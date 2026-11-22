@@ -4,7 +4,7 @@ import '@fontsource/noto-serif-sc/latin-900.css';
 import './style.css';
 import { createStage } from './stage.js';
 import { audio } from './audio.js';
-import { parseLevel, movesFor, play, allAims, solve, enemyAt, MAX_INK } from './rules.js';
+import { parseLevel, movesFor, play, allAims, solve, enemyAt, MAX_INK, W } from './rules.js';
 import { LEVELS } from './levels.js';
 import { STORY, NAMES, ART, RULES } from './story.js';
 
@@ -41,7 +41,9 @@ function hud() {
   $('#lead').textContent = face ? (st.ink ? '镜中的她领路 · 一滑到底，耗一滴墨' : '墨尽了。她动不了，翻回去') : '你领路 · 一步一格，吃子得墨';
   document.body.classList.toggle('mirror', !!face);
   $('#clean').style.display = graves[index].length ? '' : 'none';
-  stage.paint(st, face, movesFor(st, face), allAims(st), hint); layout();
+  const moves = movesFor(st, face), aims = allAims(st), hot = new Set(aims.flatMap((a) => a.squares));
+  audio.setDanger(moves.length ? moves.filter((m) => hot.has(m.to)).length / moves.length : 0);
+  stage.paint(st, face, moves, aims, hint); layout();
 }
 function banner(big, small, ms = 1500) { const b = $('#banner'); b.querySelector('b').textContent = big; b.querySelector('i').textContent = small; b.classList.remove('show'); void b.offsetWidth; b.classList.add('show'); return wait(ms); }
 function toast(text) { const t = $('#toast'); t.textContent = text; t.classList.remove('show'); void t.offsetWidth; t.classList.add('show'); }
@@ -57,7 +59,7 @@ function talk(lines) {
 async function enter(i, story = true) {
   locked = true; index = i; hint = null; const level = LEVELS[i];
   if (face) { face = 0; audio.setMirror(0); await stage.flip(0); }
-  st = parseLevel(level, graves[i]); stage.load(st); hud();
+  st = parseLevel(level, graves[i]); stage.load(st); audio.level(level, i); hud();
   if (story) { await banner(level.title, level.no + ' · ' + level.sub, 1700); await talk(STORY[level.id]); }
   locked = false;
 }
@@ -89,8 +91,13 @@ function aim(e) {
   if (body >= 0 && (legal(body) || !legal(ground))) return body;
   if (ground >= 0 && (legal(ground) || ground === st.alice || st.corpses.includes(ground) || enemyAt(st, face, ground) || enemyAt(st, 1 - face, ground))) return ground;
   if (e.pointerType === 'mouse') return ground;
-  let near = ground, reach = stage.view.tile * .8;
-  for (const m of moves) { const p = stage.project(m.to), d = Math.hypot(p.x - e.clientX, p.y - e.clientY); if (d < reach) { reach = d; near = m.to; } }
+  // within 0.8 of a square's own on-screen width (near rows are drawn wider than far ones), the closest such square wins
+  let near = ground, best = .8;
+  for (const m of moves) {
+    const p = stage.project(m.to), q = stage.project(m.to % W ? m.to - 1 : m.to + 1);
+    const d = Math.hypot(p.x - e.clientX, p.y - e.clientY) / Math.hypot(p.x - q.x, p.y - q.y);
+    if (d < best) { best = d; near = m.to; }
+  }
   return near;
 }
 let tapped = -1;
@@ -143,6 +150,7 @@ addEventListener('keydown', (e) => { if (e.code === 'Space') { e.preventDefault(
 $('#retry').onclick = () => { if (!locked) enter(index, false); };
 $('#clean').onclick = () => { if (!locked) { graves[index] = []; enter(index, false); toast('遗骸被清走了'); } };
 $('#mute').onclick = () => { $('#mute').classList.toggle('off', audio.toggle()); };
+$('#mute').classList.toggle('off', audio.muted);
 $('#hint').onclick = () => {
   if (locked) return; const path = solve(st, [0, 1], 25000);
   if (!path) return toast('白兔：这一局已经走死了，重来吧。');
