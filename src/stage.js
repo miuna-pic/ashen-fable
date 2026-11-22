@@ -234,7 +234,14 @@ export function createStage(canvas) {
     const c = portrait ? TALL : CAM; camera.fov = c.fov; camera.updateProjectionMatrix();
     const hud = document.getElementById('flip')?.getBoundingClientRect(), limit = (hud && hud.height ? hud.top : h) - 6;
     let d = Math.max(c.dist, c.wide / (w / h));
-    const clear = () => { cine(c, d, 0); return (1 - edge.set(0, 0, H / 2).project(camera).y) / 2 * h <= limit; };
+    // The near edge of the full frame's gold trim, not of the squares, wherever it passes over the button,
+    // with the camera as far to the side and as high as its sway and its lean toward the pointer ever take it.
+    const clear = () => {
+      cine(c, d, portrait ? .3 : 1.9); if (!portrait) { camera.position.y += .5; camera.lookAt(0, c.ly - lift, c.lz); camera.updateMatrixWorld(); }
+      const under = (x) => !hud || !hud.height || (x >= hud.left && x <= hud.right);
+      for (let x = -W / 2 - .66; x <= W / 2 + .66; x += .33) { const [sx, sy] = px(x, -.04, H / 2 + .66, w, h); if ((under(sx) || under(w - sx)) && sy > limit) return false; }   // w - sx: the same sway to the other side
+      return true;
+    };
     for (lift = 0; lift < 3 && !clear(); lift += .25);
     for (; d < 40 && !clear(); d += .25);
     camera.userData.base = d; cine(c, d, 0);
