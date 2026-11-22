@@ -56,7 +56,7 @@ function allowed() {
   if (c.flip !== undefined) return [];
   const only = c.only.map(P); return all.filter((m) => only.includes(m.to));
 }
-function say(who, text) { const c = $('#coach'); if (!text) return c.classList.remove('show'); c.dataset.who = who; c.querySelector('b').textContent = NAMES[who]; c.querySelector('p').textContent = text; c.classList.remove('show'); void c.offsetWidth; c.classList.add('show'); }
+function say(who, text) { const c = $('#coach'); if (!text) { c.classList.remove('show'); return layout(); } c.dataset.who = who; c.querySelector('b').textContent = NAMES[who]; c.querySelector('p').textContent = text; c.classList.remove('show'); void c.offsetWidth; c.classList.add('show'); layout(); }
 function coach() {
   const c = coachStep(); $('#flip').classList.remove('nudge');
   if (!c) return;
@@ -72,7 +72,7 @@ function hud() {
   $('#ink').innerHTML = Array.from({ length: MAX_INK }, (_, i) => `<i class="${i < st.ink ? 'on' : ''}"></i>`).join('');
   $('#lead').textContent = mod.solo ? '一步一格 · 走到敌人的格子上就是吃子' : face ? (st.ink ? '镜中的她领路 · 一滑到底，耗一滴墨' : '墨尽了。她动不了，翻回去') : '你领路 · 一步一格，吃子得墨';
   document.body.classList.toggle('mirror', !!face);
-  $('#clean').style.display = graves[index].length ? '' : 'none';
+  $('#clean').style.display = graves[index].length ? '' : 'none'; app.classList.toggle('graves', graves[index].length > 0);
   $('#flip').style.display = mod.solo ? 'none' : ''; $('#flip').classList.toggle('held', !!mod.wilful);
   $('#hint').classList.toggle('off', !!level.exam);
   const chips = [];
@@ -88,7 +88,7 @@ function hud() {
 }
 function banner(big, small, ms = 1500) { const b = $('#banner'); b.querySelector('b').textContent = big; b.querySelector('i').textContent = small; b.classList.remove('show'); void b.offsetWidth; b.classList.add('show'); return wait(ms); }
 function toast(text) { const t = $('#toast'); t.textContent = text; t.classList.remove('show'); void t.offsetWidth; t.classList.add('show'); }
-function cutin(f) { const c = $('#cutin'); c.querySelector('img').src = `./art/${f ? 'alice_b' : 'alice_a'}.webp`; c.querySelector('b').textContent = f ? '镜 噬' : '吃 子'; c.classList.remove('show'); void c.offsetWidth; c.classList.add('show'); }
+function cutin(f) { const c = $('#cutin'); c.querySelector('img').src = `./art/${f ? 'alice_b' : 'alice_a'}.webp`; c.querySelector('b').textContent = f ? '镜 噬' : '吃 子'; c.classList.remove('show'); void c.offsetWidth; c.classList.add('show'); layout(); }
 // 剧情里的 {n} 是这一个爱丽丝的编号，和左上角的计数一致。
 const han = (n) => [...String(n)].map((c, i, a) => (c === '0' ? (a.slice(i).some((x) => x !== '0') && a[i - 1] !== '0' ? '零' : '') : '一二三四五六七八九'[c - 1] + ['', '十', '百', '千', '万'][a.length - 1 - i])).join('');
 function talk(lines) {
@@ -187,7 +187,9 @@ function aim(e) {
   const moves = allowed(), legal = (s) => moves.some((m) => m.to === s);
   const ground = stage.pick(e.clientX, e.clientY), body = stage.pickPiece(e.clientX, e.clientY, face);
   // a figure standing on a legal square is meant when the point is on that square, even where a nearer figure is drawn across it
-  if (body >= 0 && (legal(body) || !legal(ground)) && !(body !== ground && legal(ground) && enemyAt(st, face, ground))) return body;
+  // nor does a figure's reach claim an open square two ranks past its feet: the drawing ends before that square's middle
+  const past = body >= 0 && legal(ground) && Math.abs(Math.floor(ground / W) - Math.floor(body / W)) > 1;
+  if (body >= 0 && !past && (legal(body) || !legal(ground)) && !(body !== ground && legal(ground) && enemyAt(st, face, ground))) return body;
   // a figure hanging under the glass is drawn across more than its own square: where no move can be made, a finger on it means that figure
   const open = legal(ground) || movesX(st, face).some((m) => m.to === ground);
   const under = body < 0 && !open ? stage.pickPiece(e.clientX, e.clientY, 1 - face) : -1;
@@ -236,9 +238,13 @@ for (const type of ['contextmenu', 'gesturestart', 'dblclick']) addEventListener
 
 // Tell the stage which parts of the screen the HUD leaves free: either the band between the top and bottom rows,
 // or the column between the left and right corners. The stage frames the board in whichever shows bigger squares.
+// the coach line slides in, so measure where it comes to rest rather than where it is this frame
+function box(e) { if (e.id !== 'coach') return e.getBoundingClientRect(); const l = (innerWidth - e.offsetWidth) / 2; return { left: l, right: l + e.offsetWidth, top: e.offsetTop, bottom: e.offsetTop + e.offsetHeight, width: e.offsetWidth }; }
 function layout() {
   const w = innerWidth, h = innerHeight, pad = Math.min(w, h) * .02 + 4;
-  const rects = ['.chapter', '.count', '.ink', '#flip', '.tools'].map((q) => $(q).getBoundingClientRect()).filter((r) => r.width);
+  // on a portrait phone the coach line and the exam chips sit over the board unless it is framed clear of them
+  const over = w / h < .8 ? ['#coach.show', '#chips'] : [];
+  const rects = ['.chapter', '.count', '.ink', '#flip', '.tools', ...over].map((q) => $(q)).filter(Boolean).map(box).filter((r) => r.width);
   const band = { l: pad, r: pad, t: pad, b: pad }, column = { l: pad, r: pad, t: pad, b: pad };
   for (const r of rects) {
     const mid = (r.left + r.right) / 2, top = (r.top + r.bottom) / 2 < h / 2;
