@@ -243,6 +243,21 @@ export async function createScene(canvas, { onPick, onHover }) {
     return m;
   }
 
+  // 回收一枚棋子：共享的底座几何体与缓存的立绘贴图不动
+  function discard(p) {
+    world.remove(p.root);
+    const cached = new Set(texCache.values());
+    p.root.traverse((o) => {
+      if (!o.isMesh) return;
+      if (o.geometry !== baseGeo && o.geometry !== rimGeo) o.geometry.dispose();
+      for (const m of [o.material, o.customDepthMaterial]) {
+        if (!m) continue;
+        if (m.map && !cached.has(m.map)) m.map.dispose();
+        m.dispose();
+      }
+    });
+  }
+
   function makePiece(piece, cell, night) {
     const root = new T.Group(); root.position.copy(cellPos(cell));
     const color = SIDE_COLOR[piece.side];
@@ -417,7 +432,7 @@ export async function createScene(canvas, { onPick, onHover }) {
         p.flip.rotation.y = state.night ? Math.PI : 0;
         p.front.castShadow = !state.night; p.back.castShadow = state.night;
       });
-      for (const [id, p] of pieces) if (!seen.has(id)) { world.remove(p.root); pieces.delete(id); }
+      for (const [id, p] of pieces) if (!seen.has(id)) { discard(p); pieces.delete(id); }
       nightGoal = state.night ? 1 : 0;
       handNow = state.bells * HOURS + state.clock; handPivot.rotation.y = handAngle(handNow);
       turnSide = state.winner ? null : state.turn;
@@ -459,7 +474,7 @@ export async function createScene(canvas, { onPick, onHover }) {
       const p = pieces.get(ev.piece.id); if (!p) return;
       pieces.delete(ev.piece.id); shake = 0.9;
       burst(p.root.position, SIDE_COLOR[ev.piece.side]);
-      tween(220, (t) => p.root.scale.setScalar(1 - t)).then(() => world.remove(p.root));
+      tween(220, (t) => p.root.scale.setScalar(1 - t)).then(() => discard(p));
     },
     tick(total) {
       const from = handNow; handNow = total;
