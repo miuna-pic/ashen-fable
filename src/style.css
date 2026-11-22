@@ -108,10 +108,14 @@ body.mirror #cutin { background: #0a0508; border-color: var(--blood); }
   #flip { left: auto; right: max(16px, env(safe-area-inset-right)); bottom: max(14px, env(safe-area-inset-bottom)); transform: skewX(-12deg); padding: 8px 26px; box-shadow: 6px 6px 0 var(--blood); }
   #flip:active { transform: skewX(-12deg) translate(4px, 4px); }
   #flip b { font-size: 26px; }
-  #dialog { background: linear-gradient(transparent 60%, rgba(10,3,6,.8)); }
-  #dialog > div { padding: 16px 18px 14px; margin-bottom: max(8px, env(safe-area-inset-bottom)); width: min(880px, 72vw); border-top-width: 4px; box-shadow: 8px 8px 0 var(--ink); } #dialog p { font-size: 14px; line-height: 1.5; min-height: 1.5em; padding-right: 5em; }
-  #dialog b { top: -16px; font-size: 13px; padding: 2px 12px; } #dialog div i { bottom: 6px; font-size: 10px; }
-  #dialog img { height: 84vh; }
+  /* the board fills the middle, so a line is spoken from the column beside it (--gap, measured in main.js) and no row is covered */
+  #dialog { background: none; justify-content: flex-start; padding-inline: max(14px, env(safe-area-inset-left)) max(14px, env(safe-area-inset-right)); }
+  #dialog[data-who=b], #dialog[data-who=shadow] { justify-content: flex-end; }
+  #dialog > div { width: clamp(150px, calc(var(--gap, 28vw) - 24px), 320px); padding: 16px 14px 26px; margin-bottom: max(10px, env(safe-area-inset-bottom)); border-top-width: 4px; box-shadow: 6px 6px 0 var(--ink); }
+  #dialog[data-who=b] > div, #dialog[data-who=shadow] > div, #dialog[data-who=queen] > div { box-shadow: 6px 6px 0 var(--blood); }
+  #dialog p { font-size: 14px; line-height: 1.55; min-height: 3.1em; }
+  #dialog b { top: -16px; left: 10px; font-size: 13px; padding: 2px 12px; } #dialog div i { right: 10px; bottom: 6px; font-size: 10px; }
+  #dialog img { height: 84vh; max-width: calc(var(--gap, 28vw) + 24px); object-fit: contain; object-position: left bottom; } #dialog[data-who=b] img, #dialog[data-who=shadow] img { object-position: left bottom; }
   #banner::before { height: 30vh; } #banner b { font-size: 15vh; }
   #title h1 { font-size: clamp(48px, 19vh, 130px); top: 7vh; } #title .tag { bottom: 31vh; font-size: 13px; line-height: 1.7; } #begin { bottom: 13vh; font-size: 20px; padding: 9px 42px; } #title small { bottom: 10px; }
 }

@@ -1,10 +1,15 @@
-// Adaptive render quality. Phone GPUs differ by an order of magnitude, so the stage starts sharp and sheds
-// pixels (then bloom) until it holds its frame rate. A step that buys nothing is undone: the frame rate
+// Adaptive render quality. Phone GPUs differ by an order of magnitude, so the stage sheds work until it holds
+// its frame rate, cheapest loss first: the sky and sea buffer (soft paint, `back` times the picture), then bloom,
+// and only then the pixels of the board and the pieces. A step that buys nothing is undone: the frame rate
 // is then capped by the display or the CPU, not by pixels.
 const SLOW = 1000 / 48, WINDOW = 800, KEY = 'mirror-alice-q';
 export function createQuality(apply, dpr = Math.min(window.devicePixelRatio || 1, 2)) {
-  const LEVELS = [1, .8, .65, .5, .375].map((k, i) => ({ ratio: Math.max(.75, dpr * k), bloom: i < 2 }));
-  let level = Math.min(LEVELS.length - 1, sessionStorage.getItem(KEY) | 0), locked = false;
+  const LEVELS = [[1, 1, 1], [1, .5, 1], [1, .5, 0], [1, .34, 0], [.8, .34, 0], [.65, .34, 0], [.5, .34, 0], [.375, .34, 0]]
+    .map(([k, back, bloom]) => ({ ratio: Math.max(.75, dpr * k), back, bloom: !!bloom }));
+  // a touch device starts with the backdrop already halved: it is the one step that cannot be seen
+  const first = matchMedia('(pointer: coarse)').matches ? 1 : 0, saved = sessionStorage.getItem(KEY);
+  const pin = new URLSearchParams(location.search).get('q');   // ?q=3 holds one step, to compare them on a device
+  let level = Math.min(LEVELS.length - 1, pin !== null ? pin | 0 : saved === null ? first : saved | 0), locked = pin !== null;
   let n = 0, sum = 0, skip = 2, slow = 0, before = 0, fps = 60;
   const set = (i) => { level = i; sessionStorage.setItem(KEY, i); apply(LEVELS[i]); n = sum = slow = 0; skip = 1; };
   apply(LEVELS[level]);

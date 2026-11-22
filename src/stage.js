@@ -4,9 +4,8 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
-import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { W, H, X, Y, KINDS } from './rules.js';
-import { createScenery } from './scenery.js';
+import { createScenery, BACKDROP } from './scenery.js';
 import { createVfx, HUE } from './vfx.js';
 import { createQuality } from './quality.js';
 
@@ -54,7 +53,9 @@ const FINAL = {
       col *= 1. - r * mix(.5, 1.25, dark);
       col += flash * mix(vec3(1., .97, .95) * (1. - lum), vec3(1., .25, .3), dark);   // never past white on the bright side
       col += (h(u*900.)-.5) * mix(.012, .007, dark);
-      gl_FragColor = vec4(col,1.); }`,
+      gl_FragColor = vec4(col,1.);
+      #include <colorspace_fragment>
+    }`,   // the grade is the last pass and converts to the screen's colour space itself: one full-screen pass fewer
 };
 
 export function createStage(canvas) {
@@ -204,7 +205,7 @@ export function createStage(canvas) {
 
   const composer = new EffectComposer(renderer); composer.addPass(new RenderPass(scene, camera));
   const bloom = new UnrealBloomPass(new T.Vector2(256, 256), .2, .6, .9); composer.addPass(bloom);
-  const final = new ShaderPass(FINAL); composer.addPass(final); composer.addPass(new OutputPass());
+  const final = new ShaderPass(FINAL); composer.addPass(final);
   let portrait = false, lift = 0; const edge = new T.Vector3();
   const cine = (c, d, sway) => { camera.position.set(sway, Math.sin(c.pitch) * d, Math.cos(c.pitch) * d + c.back); camera.lookAt(0, c.ly - lift, c.lz); camera.updateMatrixWorld(); };
   const pose = (d, sway = 0) => { camera.position.set(sway, Math.sin(view.pitch) * d, Math.cos(view.pitch) * d); camera.lookAt(0, 0, 0); camera.updateMatrixWorld(); };
@@ -257,8 +258,13 @@ export function createStage(canvas) {
   function resize() {
     const w = canvas.clientWidth, h = canvas.clientHeight; if (!w || !h) return;
     renderer.setSize(w, h, false); composer.setSize(w, h); fit();
+    const r = renderer.getPixelRatio() * back; backdrop.setSize(Math.max(1, Math.round(w * r)), Math.max(1, Math.round(h * r)));
+    bloom.setSize(w * renderer.getPixelRatio() / 2, h * renderer.getPixelRatio() / 2);   // a glow this soft loses nothing at half size
   }
-  const quality = createQuality((q) => { renderer.setPixelRatio(q.ratio); composer.setPixelRatio(q.ratio); bloom.enabled = q.bloom; resize(); });
+  // Sky and sea go into their own buffer, `back` times the size of the picture, and become the scene's background:
+  // they are soft paint and water, so a phone can halve them and keep the board and the pieces at full sharpness. At full size they are drawn straight into the picture.
+  const backdrop = new T.WebGLRenderTarget(1, 1, { type: T.HalfFloatType, depthBuffer: false }); let back = 1;
+  const quality = createQuality((q) => { back = q.back; scene.background = null; camera.layers.set(0); if (back === 1) camera.layers.enable(BACKDROP); renderer.setPixelRatio(q.ratio); composer.setPixelRatio(q.ratio); bloom.enabled = q.bloom; resize(); });
   addEventListener('resize', resize);
   function setSafe(list) { view.safe = list; fit(); }
   if (import.meta.env.DEV) window.__cam = CAM;
@@ -276,6 +282,10 @@ export function createStage(canvas) {
     // the grade follows the glass as it turns, at any frame rate
     final.uniforms.time.value = t; final.uniforms.punch.value = fx.punch; final.uniforms.hurt.value = fx.hurt; final.uniforms.flash.value = fx.flash;
     final.uniforms.dark.value = (1 - Math.cos(world.rotation.z)) / 2; bloom.strength = .14 + final.uniforms.dark.value * .3; bloom.threshold = .9 - final.uniforms.dark.value * .25;
+    if (back < 1) {
+      scene.background = null; camera.layers.set(BACKDROP); renderer.setRenderTarget(backdrop); renderer.render(scene, camera);
+      renderer.setRenderTarget(null); camera.layers.set(0); scene.background = backdrop.texture;
+    }
     composer.render(); requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);

@@ -4,7 +4,7 @@ import '@fontsource/noto-serif-sc/latin-900.css';
 import './style.css';
 import { createStage } from './stage.js';
 import { audio } from './audio.js';
-import { parseLevel, movesFor, play, allAims, solve, enemyAt, MAX_INK, W } from './rules.js';
+import { parseLevel, movesFor, play, allAims, solve, enemyAt, MAX_INK, W, H } from './rules.js';
 import { LEVELS } from './levels.js';
 import { STORY, NAMES, ART, RULES } from './story.js';
 
@@ -142,6 +142,9 @@ function layout() {
   const centred = { ...column, l: Math.max(column.l, column.r), r: Math.max(column.l, column.r) };
   stage.setSafe([band, centred, { ...column, weight: .85 }]);
   app.style.setProperty('--toast', `${band.b}px`);
+  // the clear strip either side of the board, for the landscape dialogue
+  const xs = [0, W - 1, W * (H - 1), W * H - 1].map((sq) => stage.project(sq).x);
+  document.documentElement.style.setProperty('--gap', `${Math.max(0, Math.min(Math.min(...xs), w - Math.max(...xs)) - stage.view.tile * .85)}px`);
 }
 addEventListener('resize', layout); addEventListener('orientationchange', () => setTimeout(layout, 300));
 document.fonts?.ready.then(layout);
@@ -160,3 +163,9 @@ $('#hint').onclick = () => {
 $('#begin').onclick = async () => { audio.start(); $('#title').classList.add('gone'); const n = new URLSearchParams(location.search).get('level') | 0; await enter(n >= 0 && n < LEVELS.length ? n : 0); };
 st = parseLevel(LEVELS[0]); stage.load(st); hud();
 if (import.meta.env.DEV) window.__game = { stage, get tapped() { return tapped; }, get st() { return st; }, get idle() { return !locked && !stage.busy; }, get face() { return face; }, enter, flip, move };
+// ?fps shows what this device is really getting: frame rate, drawing-buffer size and the quality step it settled on.
+if (new URLSearchParams(location.search).has('fps')) {
+  const el = document.body.appendChild(document.createElement('div')), c = $('#stage');
+  el.style.cssText = 'position:fixed;z-index:99;left:50%;top:max(4px,env(safe-area-inset-top));transform:translateX(-50%);padding:2px 8px;background:#000c;color:#fff;font:12px/1.4 monospace;pointer-events:none;white-space:nowrap';
+  setInterval(() => { const q = stage.quality; el.textContent = `${q.fps.toFixed(0)} fps · ${c.width}×${c.height} · step ${q.level}`; }, 500);
+}
