@@ -6,6 +6,8 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { W, H, X, Y, KINDS } from './rules.js';
+import { createScenery } from './scenery.js';
+import { createVfx, HUE } from './vfx.js';
 
 const ease = (t) => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 const out = (t) => 1 - Math.pow(1 - t, 3);
@@ -31,86 +33,53 @@ const GLYPH = {
   card: glyph((g, s) => { g.fillStyle = '#fff'; g.beginPath(); g.roundRect(-s * .32, -s * .46, s * .64, s * .92, 18); g.fill(); g.fillStyle = '#c0102c'; heart(g, 50); g.fill(); g.save(); g.translate(-s * .22, -s * .34); heart(g, 14); g.fill(); g.restore(); }),
 };
 
-const SKY = {
-  uniforms: { time: { value: 0 } },
-  vertexShader: 'varying vec3 p; void main(){ p = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }',
-  fragmentShader: `varying vec3 p; uniform float time;
-    float h(vec2 v){ return fract(sin(dot(v, vec2(127.1,311.7))) * 43758.5453); }
-    float n(vec2 v){ vec2 i=floor(v), f=fract(v); f=f*f*(3.-2.*f); return mix(mix(h(i),h(i+vec2(1,0)),f.x), mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x), f.y); }
-    float fbm(vec2 v){ float a=.5, s=0.; for(int i=0;i<5;i++){ s+=a*n(v); v*=2.03; a*=.5; } return s; }
-    void main(){ vec3 d = normalize(p); float y = d.y; vec2 uv = vec2(atan(d.z,d.x)*1.6, y*4.);
-      float c = fbm(uv*1.4 + vec2(time*.01, 0.));
-      vec3 up = mix(vec3(1.,.93,.95), vec3(.66,.76,.95), smoothstep(0.,.75,y));
-      up = mix(up, vec3(1.,.72,.82), smoothstep(.45,.8,c) * (1.-smoothstep(.0,.6,y)) * .9);
-      float r = fbm(uv*2.2 - vec2(time*.015, time*.02));
-      vec3 dn = mix(vec3(.42,.02,.07), vec3(.012,.004,.012), smoothstep(0.,.5,-y));
-      dn += vec3(.9,.08,.12) * pow(smoothstep(.5,.95,r), 3.) * (1.-smoothstep(0.,.7,-y)) * .8;
-      vec3 col = y > 0. ? up : dn;
-      col += vec3(1.,.9,.9) * exp(-abs(y)*60.) * .9;
-      gl_FragColor = vec4(col,1.); }`,
-};
+// Framing: low enough that the horizon and its skyline sit above the far edge of the board.
+const CAM = { fov: 48, pitch: .56, dist: 11.7, wide: 19, back: 0, ly: -1.2, lz: -4 };
+const TALL = { fov: 50, pitch: .62, dist: 12, wide: 9.5, back: 0, ly: -.3, lz: -4 };
 const FINAL = {
-  uniforms: { tDiffuse: { value: null }, time: { value: 0 }, punch: { value: 0 }, dark: { value: 0 }, hurt: { value: 0 } },
+  uniforms: { tDiffuse: { value: null }, time: { value: 0 }, punch: { value: 0 }, dark: { value: 0 }, hurt: { value: 0 }, flash: { value: 0 } },
   vertexShader: 'varying vec2 u; void main(){ u = uv; gl_Position = vec4(position.xy,0.,1.); }',
-  fragmentShader: `varying vec2 u; uniform sampler2D tDiffuse; uniform float time, punch, dark, hurt;
+  fragmentShader: `varying vec2 u; uniform sampler2D tDiffuse; uniform float time, punch, dark, hurt, flash;
     float h(vec2 v){ return fract(sin(dot(v, vec2(12.9898,78.233))+time) * 43758.5453); }
-    void main(){ vec2 c = u-.5; float r = dot(c,c); vec2 o = c * (.0022 + punch*.06) * (1.+r*4.);
-      vec2 w = u + c * punch * .12 * sin(r*30.-time*20.);
+    void main(){ vec2 c = u-.5; float r = dot(c,c);
+      vec2 o = c * (r * .010 + punch * .05);                       // lens fringe only toward the corners, and on impact
+      vec2 w = u + c * punch * .10 * sin(r*30.-time*20.);
       vec3 col = vec3(texture2D(tDiffuse, w+o).r, texture2D(tDiffuse, w).g, texture2D(tDiffuse, w-o).b);
       float lum = dot(col, vec3(.3,.6,.1));
-      col = mix(col, mix(vec3(lum), col, 1.25), 1.);
-      col = mix(col, vec3(lum) * vec3(1.,.12,.16) * 1.6, hurt);
-      col *= 1. - r * mix(.9, 1.9, dark);
-      col += (h(u*900.)-.5) * mix(.03,.045,dark);
-      col = mix(col, 1.-col, step(.5, punch) * step(fract(time*24.), .5) * .0);
+      col = mix(vec3(lum), col, mix(1.12, 1.18, dark));
+      vec3 lo = clamp(col, 0., 1.); col += (lo * lo * (3. - 2. * lo) - lo) * .55;        // gentle s-curve
+      col *= mix(vec3(1.02, .99, 1.01), vec3(1.05, .96, .97), dark);
+      col = mix(col, lum * lum * vec3(1.,.08,.12) * 1.25, hurt * .8);       // the kill drains the frame to blood without flattening it
+      col *= 1. - r * mix(.5, 1.25, dark);
+      col += flash * mix(vec3(1., .97, .95) * (1. - lum), vec3(1., .25, .3), dark);   // never past white on the bright side
+      col += (h(u*900.)-.5) * mix(.012, .007, dark);
       gl_FragColor = vec4(col,1.); }`,
 };
 
 export function createStage(canvas) {
   const renderer = new T.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
   const dpr = Math.min(devicePixelRatio || 1, 2); renderer.setPixelRatio(dpr);
-  const scene = new T.Scene(), camera = new T.PerspectiveCamera(40, 1, .1, 200);
+  const scene = new T.Scene(), camera = new T.PerspectiveCamera(40, 1, .1, 80);
   const world = new T.Group(); scene.add(world);
-  const sky = new T.Mesh(new T.SphereGeometry(90, 48, 32), new T.ShaderMaterial({ ...SKY, side: T.BackSide, depthWrite: false })); world.add(sky);
 
-  // The sea of glass around the board: pale from above, black from below.
-  const seaTex = glyph((g, s) => { const r = g.createRadialGradient(0, 0, s * .08, 0, 0, s / 2); r.addColorStop(0, 'rgba(255,255,255,.9)'); r.addColorStop(.6, 'rgba(255,255,255,.8)'); r.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = r; g.fillRect(-s / 2, -s / 2, s, s); }, 512);
+
+  const scenery = createScenery(world), vfx = createVfx(world, scenery.blob);
   const plane = new T.PlaneGeometry(1, 1);
   const flat = (map, color, opacity = 1, extra = {}) => new T.MeshBasicMaterial({ map, color, transparent: true, opacity, depthWrite: false, toneMapped: false, ...extra });
   const lay = (mat, face, size = 1) => { const m = new T.Mesh(plane, mat); m.rotation.x = face ? Math.PI / 2 : -Math.PI / 2; m.scale.setScalar(size); return m; };
-  const seaA = lay(flat(seaTex, '#ecdbe6', .6), 0, 120), seaB = lay(flat(seaTex, '#5a0816', .95), 1, 60);
-  seaA.position.y = -.02; seaB.position.y = -.03; seaA.renderOrder = seaB.renderOrder = -5; world.add(seaA, seaB); const pit = lay(flat(null, '#060104', 1), 1, 400); pit.position.y = .04; pit.renderOrder = -6; world.add(pit);
 
   // Tiles.
-  const tileTex = glyph((g, s) => { g.fillStyle = '#fff'; g.fillRect(-s / 2, -s / 2, s, s); const r = g.createLinearGradient(-s / 2, -s / 2, s / 2, s / 2); r.addColorStop(0, 'rgba(255,255,255,0)'); r.addColorStop(.48, 'rgba(0,0,0,.0)'); r.addColorStop(1, 'rgba(0,0,0,.28)'); g.fillStyle = r; g.fillRect(-s / 2, -s / 2, s, s); g.strokeStyle = 'rgba(0,0,0,.35)'; g.lineWidth = 6; g.strokeRect(-s / 2, -s / 2, s, s); });
-  const PAL = [['#f3ecf1', '#8fa9e0'], ['#4a0a14', '#0d0a10']];
-  const tiles = [], marks = [];
+  const tiles = [], marks = [new T.Group(), new T.Group()]; world.add(...marks);
   for (let s = 0; s < W * H; s++) {
     const p = local(s), dark = (X(s) + Y(s)) % 2, pair = [];
     for (const face of [0, 1]) {
-      const t = lay(flat(tileTex, PAL[face][dark], face ? .86 : .8), face, .97); t.position.set(p.x, face ? -.001 : .001, p.z); t.renderOrder = -3; world.add(t);
-      const mk = (z) => { const m = lay(flat(GLYPH.move, '#fff', 0, { blending: T.AdditiveBlending }), face, .9); m.position.set(p.x, (face ? -1 : 1) * z, p.z); m.renderOrder = -2; m.visible = false; world.add(m); return m; };
-      pair.push({ tile: t, aim: mk(.012), move: mk(.02), goal: mk(.016) });
+
+      const mk = (z) => { const m = lay(flat(GLYPH.move, '#fff', 0, { blending: T.AdditiveBlending }), face, .9); m.position.set(p.x, (face ? -1 : 1) * z, p.z); m.renderOrder = -2; m.visible = false; marks[face].add(m); return m; };
+      pair.push({ aim: mk(.012), move: mk(.02), goal: mk(.016) });
     }
     tiles.push(pair);
   }
-  const rim = new T.LineSegments(new T.EdgesGeometry(new T.BoxGeometry(W + .16, .05, H + .16)), new T.LineBasicMaterial({ color: '#f6d28a', toneMapped: false })); world.add(rim);
 
-  // Drifting set dressing: cards and petals above, embers and a dead clock below.
-  const cards = new T.InstancedMesh(plane, new T.MeshBasicMaterial({ map: GLYPH.card, transparent: true, alphaTest: .4, side: T.DoubleSide, toneMapped: false }), 46);
-  const cardSeed = Array.from({ length: 46 }, (_, i) => ({ a: i * 2.4, r: 7 + (i * 37 % 17), y: 1.5 + (i * 53 % 23) * .5, s: .5 + (i % 5) * .22, w: .2 + (i % 7) * .07 }));
-  world.add(cards);
-  const dust = (count, color, size, sign) => { const pos = new Float32Array(count * 3); for (let i = 0; i < count; i++) { pos[i * 3] = (Math.random() - .5) * 30; pos[i * 3 + 1] = sign * Math.random() * 12; pos[i * 3 + 2] = (Math.random() - .5) * 30; }
-    const g = new T.BufferGeometry(); g.setAttribute('position', new T.BufferAttribute(pos, 3));
-    const pts = new T.Points(g, new T.PointsMaterial({ color, size, map: GLYPH.blob, transparent: true, depthWrite: false, blending: sign > 0 ? T.NormalBlending : T.AdditiveBlending, toneMapped: false })); world.add(pts); return pts; };
-  const petals = dust(260, '#ffffff', .13, 1), embers = dust(320, '#ff3b2f', .12, -1);
-  const clock = new T.Group(); clock.position.set(0, -16, -6); world.add(clock);
-  const red = new T.MeshBasicMaterial({ color: '#b3122a', toneMapped: false });
-  clock.add(new T.Mesh(new T.TorusGeometry(15, .12, 8, 96), red), new T.Mesh(new T.TorusGeometry(13.6, .04, 8, 96), red));
-  for (let i = 0; i < 12; i++) { const m = new T.Mesh(new T.BoxGeometry(.18, 1.6, .18), red); m.position.set(Math.sin(i / 12 * 6.283) * 14.3, Math.cos(i / 12 * 6.283) * 14.3, 0); m.rotation.z = -i / 12 * 6.283; clock.add(m); }
-  const hands = [9, 12.5].map((l) => { const m = new T.Mesh(new T.BoxGeometry(.22, l, .22).translate(0, l / 2, 0), red); clock.add(m); return m; }); clock.rotation.x = Math.PI / 2;
-  const spires = new T.Group(); world.add(spires);
-  for (let i = 0; i < 26; i++) { const up = i % 2 === 0, h = 5 + (i * 29 % 13); const m = new T.Mesh(new T.ConeGeometry(.5 + (i % 4) * .3, h, 4), new T.MeshBasicMaterial({ color: up ? '#d9c9e6' : '#1c0308', toneMapped: false })); const a = i * .9 + 1; m.position.set(Math.cos(a) * (24 + i % 5 * 4), (up ? 1 : -1) * h / 2, -Math.abs(Math.sin(a)) * 30 - 10); if (!up) m.rotation.x = Math.PI; spires.add(m); }
 
   // Pieces are standees: face 0 stands on the glass, face 1 hangs beneath it.
   const pieces = new Map(); const textures = {};
@@ -119,7 +88,12 @@ export function createStage(canvas) {
     const h = HEIGHT[name] || 1.34, g = new T.Group(), body = new T.Mesh(plane, new T.MeshBasicMaterial({ map: textures[name], transparent: true, alphaTest: .35, side: T.DoubleSide, toneMapped: false }));
     body.scale.set(h * ASPECT[name], h, 1); body.position.y = h / 2 - .03; body.rotation.x = -.16;
     const shade = lay(flat(GLYPH.blob, face ? '#ff1d3a' : '#27304d', face ? .5 : .45), 0, .95); shade.position.y = .004;
-    const inner = new T.Group(); inner.add(body, shade); if (face) inner.rotation.z = Math.PI; g.add(inner); g.userData = { body, inner, h }; world.add(g); return g;
+    const inner = new T.Group(); inner.add(body, shade); if (face) inner.rotation.z = Math.PI; g.add(inner); g.userData = { body, inner, h, face, shade }; world.add(g); return g;
+  }
+  // Whoever hangs in the far world is drawn before the glass, so the board tints them like a reflection.
+  function order(face) {
+    for (const g of [...pieces.values(), ...corpses, ...(alice || [])]) { const near = g.userData.face === face; g.userData.body.renderOrder = near ? 0 : -4; g.userData.shade.visible = near; }
+    marks.forEach((m, side) => { m.visible = side === face; });
   }
   let alice = null, corpses = [], flipped = 0, state = null, busy = 0;
   const clear = () => { for (const g of [...pieces.values(), ...corpses, ...(alice || [])]) world.remove(g); pieces.clear(); corpses = []; alice = null; };
@@ -128,8 +102,8 @@ export function createStage(canvas) {
     alice = [standee('alice_a', 0), standee('alice_b', 1)]; alice.forEach((g) => g.position.copy(local(st.alice)));
     for (const e of st.enemies) { const g = standee(KINDS[e.kind].key, e.face); g.position.copy(local(e.at)); pieces.set(e.id, g); }
     for (const c of st.corpses) for (const face of [0, 1]) { const g = standee('alice_a', face); g.position.copy(local(c)); const b = g.userData.body; b.material.color.set(face ? '#7a0d1c' : '#3b3340'); b.rotation.z = 1.25; b.scale.multiplyScalar(.8); b.position.set(.1, .34, 0); corpses.push(g); }
-    for (const s of st.holes) tiles[s].forEach((f) => { f.tile.visible = false; });
-    tiles.forEach((pair, s) => pair.forEach((f) => { if (!st.holes.has(s)) f.tile.visible = true; f.goal.visible = s === st.goal; f.goal.material.map = GLYPH.goal; f.goal.material.color.set('#ffd774'); f.goal.material.opacity = .95; }));
+    scenery.setBoard(st); order(flipped);
+    tiles.forEach((pair, s) => pair.forEach((f) => { f.goal.visible = s === st.goal; f.goal.material.map = GLYPH.goal; f.goal.material.color.set('#ffd774'); f.goal.material.opacity = .95; }));
   }
   // Threats of the facing world are filled; threats from the far side show as dashed ghosts.
   function paint(st, face, moves, aims, hint) {
@@ -140,34 +114,50 @@ export function createStage(canvas) {
       f.aim.material.blending = side ? T.AdditiveBlending : T.NormalBlending;
       const mv = side === face && moves.find((m) => m.to === s);
       f.move.visible = !!mv || (hint === s && side === face);
-      if (mv) { f.move.material.map = mv.capture !== null ? GLYPH.take : GLYPH.move; f.move.material.color.set(side ? '#ffffff' : '#1c4fd6'); f.move.material.blending = side ? T.AdditiveBlending : T.NormalBlending; f.move.material.opacity = hint === s ? 1 : .8; f.move.scale.setScalar(hint === s ? 1.05 : mv.capture !== null ? .96 : .62); }
+      if (mv) { f.move.material.map = mv.capture !== null ? GLYPH.take : GLYPH.move; f.move.material.color.set(side ? '#ffffff' : '#1c4fd6'); f.move.material.blending = side ? T.AdditiveBlending : T.NormalBlending; f.move.material.opacity = hint === s ? 1 : mv.capture !== null ? .95 : side ? .6 : .8; f.move.scale.setScalar(hint === s ? 1.05 : mv.capture !== null ? .96 : side ? .36 : .56); }
     }));
   }
 
   const tweens = new Set();
   const tween = (ms, fn, curve = ease) => new Promise((done) => { const t = { t0: performance.now(), ms, fn, curve, done }; tweens.add(t); });
-  const fx = { punch: 0, hurt: 0 };
+  const fx = { punch: 0, hurt: 0, flash: 0 };
+  const kick = (v, ms = 260) => { fx.punch = v; return tween(ms, (k) => { fx.punch = v * (1 - k); }, out); };
+  const flare = (v, ms = 320) => { fx.flash = v; return tween(ms, (k) => { fx.flash = v * (1 - k); }, out); };
+  const mid = new T.Vector3();
   async function flip(face) {
     busy++; const from = world.rotation.z, to = face ? Math.PI : 0; flipped = face;
-    await tween(900, (k) => { world.rotation.z = from + (to - from) * k; fx.punch = Math.sin(k * Math.PI) * .9; camera.userData.dolly = Math.sin(k * Math.PI) * 2.2; });
+    const side = face ? -1 : 1;
+    vfx.ring(mid, -side, face ? '#c9902f' : '#ff2a3c', 7, 700, face ? .1 : 1, .05);
+    let swapped = false; await tween(900, (k) => { world.rotation.z = from + (to - from) * k; if (!swapped && k >= .5) { swapped = true; order(face); flare(face ? .1 : .06, 500); } fx.punch = Math.sin(k * Math.PI) * .7; camera.userData.dolly = Math.sin(k * Math.PI) * 2.6; });
+    vfx.ring(mid, side, face ? '#ff2a3c' : '#c9902f', 8, 900, face ? 1 : .1, .035);
+    for (let i = 0; i < 4; i++) vfx.burst(local([0, W - 1, W * (H - 1), W * H - 1][i]), side, { count: 14, speed: 1.4, up: 1.2, y: .2, life: 1.1, size: .09, g: -.6, colors: face ? HUE.ember : HUE.gold, add: face ? 1 : .5 });
     fx.punch = 0; busy--;
   }
   const hop = (g, a, b, ms, lift) => tween(ms, (k) => { g.position.lerpVectors(a, b, k); g.userData.inner.position.y = Math.sin(k * Math.PI) * lift; });
   async function animate(ev, hooks) {
     busy++;
     for (const e of ev) {
-      if (e.t === 'move') { const a = local(e.from), b = local(e.to), far = a.distanceTo(b) > 1.6;
-        if (e.face === 1) hooks.sfx('slide'); else hooks.sfx('step');
+      if (e.t === 'move') { const a = local(e.from), b = local(e.to), far = a.distanceTo(b) > 1.6, side = e.face ? -1 : 1;
+        if (e.face === 1) { hooks.sfx('slide'); vfx.streak(a, b, -1, { count: 10 + a.distanceTo(b) * 9, life: .7, size: .12, h: 1.2, colors: HUE.ember, drag: 1 }); vfx.streak(a, b, 1, { count: 6, life: .5, size: .1, h: .2, colors: HUE.ink, add: 0 }); }
+        else { hooks.sfx('step'); vfx.ring(a, 1, '#3d6bff', .7, 380); }
         await Promise.all(alice.map((g) => hop(g, a, b, far ? 300 : 260, e.face ? 0 : .28)));
-        if (e.face === 1) { fx.punch = .25; tween(260, (k) => { fx.punch = .25 * (1 - k); }); } }
-      if (e.t === 'capture') { const g = pieces.get(e.id); hooks.sfx('kill'); hooks.cutin(e.face); fx.punch = .5;
-        await tween(420, (k) => { g.userData.body.material.color.setScalar(1 + 6 * (1 - k)); g.scale.set(1 + k * .5, 1 - k, 1); fx.punch = .5 * (1 - k); }, out); g.visible = false; }
-      if (e.t === 'shift') { const g = pieces.get(e.id); hooks.sfx('tick'); await hop(g, local(e.from), local(e.to), 240, .22); }
+        vfx.ring(b, side, e.face ? '#ff2a3c' : '#2f5cff', e.face ? 1.5 : 1.0, 480); vfx.ring(b, -side, e.face ? '#b9c6ff' : '#ff2a3c', .7, 420);
+        vfx.burst(b, side, { count: e.face ? 16 : 8, speed: e.face ? 1.6 : .9, up: .5, y: .1, h: .1, life: .55, size: .09, colors: e.face ? HUE.ember : HUE.snow, add: e.face ? 1 : .25 });
+        if (e.face === 1) kick(.22); }
+      if (e.t === 'capture') { const g = pieces.get(e.id), at = g.position, side = e.face ? -1 : 1; hooks.sfx('kill'); hooks.cutin(e.face); kick(.5, 420); flare(.22);
+        vfx.ring(at, side, e.face ? '#ffffff' : '#ff1f3d', 2.4, 600, e.face ? 1 : .3, .07);
+        vfx.burst(at, side, { count: 46, speed: 3.4, up: .5, spread: 1.2, y: .7, h: 1, life: .8, size: .13, g: 5, colors: e.face ? HUE.ghost : HUE.blood, add: e.face ? 1 : .05 });
+        vfx.burst(at, side, { count: 14, speed: 1.2, up: 1.5, y: .6, life: 1.3, size: .2, g: -.5, colors: e.face ? HUE.ember : HUE.gold, add: e.face ? 1 : .5 });
+        await tween(420, (k) => { g.userData.body.material.color.setScalar(1 + 6 * (1 - k)); g.scale.set(1 + k * .5, 1 - k, 1); }, out); g.visible = false; }
+      if (e.t === 'shift') { const g = pieces.get(e.id), b = local(e.to); hooks.sfx('tick'); await hop(g, local(e.from), b, 240, .22); vfx.ring(b, g.userData.face ? -1 : 1, g.userData.face ? '#ff2a3c' : '#c21733', .8, 360); }
       if (e.t === 'strike') { const g = pieces.get(e.id), a = g.position.clone(), b = local(e.at); hooks.sfx('death');
-        await tween(170, (k) => { g.position.lerpVectors(a, b, k * .8); }, out); fx.hurt = 1; fx.punch = .8;
-        await tween(700, (k) => { alice.forEach((al) => { al.userData.body.rotation.z = k * 1.25; al.userData.body.position.y = al.userData.h / 2 - k * .4; }); fx.punch = .8 * (1 - k); g.position.lerpVectors(b, a, k).lerp(b, .8 * (1 - k)); }, out);
+        await tween(170, (k) => { g.position.lerpVectors(a, b, k * .8); }, out); fx.hurt = 1; kick(.8, 700); flare(.2);
+        for (const side of [1, -1]) { vfx.ring(b, side, '#ff1030', 3.2, 800, side < 0 ? 1 : .2, .06); vfx.burst(b, side, { count: 44, speed: 3.6, up: .7, spread: 1.4, y: .6, h: .9, life: 1, size: .14, g: 4, colors: side < 0 ? HUE.ember : HUE.blood, add: side < 0 ? 1 : .05 }); }
+        await tween(700, (k) => { alice.forEach((al) => { al.userData.body.rotation.z = k * 1.25; al.userData.body.position.y = al.userData.h / 2 - k * .4; }); g.position.lerpVectors(b, a, k).lerp(b, .8 * (1 - k)); }, out);
         await tween(500, (k) => { fx.hurt = 1 - k; }); }
-      if (e.t === 'win') { hooks.sfx('win'); await tween(700, (k) => { alice.forEach((g) => { g.userData.inner.position.y = k * 1.2; g.userData.body.material.color.setScalar(1 + k * 4); }); fx.punch = k * .5; }); fx.punch = 0; }
+      if (e.t === 'win') { hooks.sfx('win'); const at = alice[0].position; flare(.3, 900);
+        for (const side of [1, -1]) { vfx.ring(at, side, side > 0 ? '#ffd774' : '#ffb04a', 3.5, 1000, side < 0 ? 1 : .6, .05); vfx.burst(at, side, { count: 60, speed: 1.3, up: 2.4, spread: 2, y: .3, h: .4, r: .7, life: 1.6, size: .13, g: -1.2, drag: .8, colors: HUE.gold, add: side < 0 ? 1 : .6 }); }
+        await tween(700, (k) => { alice.forEach((g) => { g.userData.inner.position.y = k * 1.2; g.userData.body.material.color.setScalar(1 + k * 4); }); fx.punch = k * .5; }); fx.punch = 0; }
     }
     busy--;
   }
@@ -182,27 +172,34 @@ export function createStage(canvas) {
   const composer = new EffectComposer(renderer); composer.addPass(new RenderPass(scene, camera));
   const bloom = new UnrealBloomPass(new T.Vector2(256, 256), .2, .6, .9); composer.addPass(bloom);
   const final = new ShaderPass(FINAL); composer.addPass(final); composer.addPass(new OutputPass());
-  let portrait = false;
+  let portrait = false, lift = 0; const edge = new T.Vector3();
+  const pose = (c, d, sway) => { camera.position.set(sway, Math.sin(c.pitch) * d, Math.cos(c.pitch) * d + c.back); camera.lookAt(0, c.ly - lift, c.lz); };
   function resize() {
     const w = canvas.clientWidth, h = canvas.clientHeight; if (!w || !h) return;
-    renderer.setSize(w, h, false); composer.setSize(w, h); camera.aspect = w / h; portrait = w / h < .8; camera.userData.base = Math.max(11.6, 3.8 / (Math.tan(.349) * (w / h)) + 1.5); camera.updateProjectionMatrix();
+    renderer.setSize(w, h, false); composer.setSize(w, h); camera.aspect = w / h; portrait = w / h < .8; const c = portrait ? TALL : CAM;
+    camera.fov = c.fov; camera.updateProjectionMatrix();
+    // tilt down, then pull back, until the near edge of the board clears whatever HUD sits at the bottom centre (the flip button)
+    const hud = document.getElementById('flip')?.getBoundingClientRect(), limit = (hud && hud.height ? hud.top : h) - 6;
+    let d = Math.max(c.dist, c.wide / (w / h));
+    const clear = () => { pose(c, d, 0); camera.updateMatrixWorld(); return (1 - edge.set(0, 0, H / 2).project(camera).y) / 2 * h <= limit; };
+    for (lift = 0; lift < 3 && !clear(); lift += .25);
+    for (; d < 40 && !clear(); d += .25);
+    camera.userData.base = d;
   }
   addEventListener('resize', resize); resize();
+  if (import.meta.env.DEV) window.__cam = CAM;
   const m4 = new T.Object3D(); let last = performance.now();
   function frame(now) {
     const dt = Math.min(.05, (now - last) / 1000); last = now; const t = now / 1000;
     for (const tw of [...tweens]) { const k = Math.min(1, (now - tw.t0) / tw.ms); tw.fn(tw.curve(k)); if (k >= 1) { tweens.delete(tw); tw.done(); } }
-    const d = (camera.userData.base || 13) + (camera.userData.dolly || 0), pitch = portrait ? .8 : .47;
-    camera.position.set(Math.sin(t * .13) * .35, Math.sin(pitch) * d, Math.cos(pitch) * d + (portrait ? .2 : .9)); camera.lookAt(0, portrait ? .4 : .9, portrait ? -.2 : -.1);
-    SKY.uniforms.time.value = t; sky.material.uniforms.time.value = t;
-    cardSeed.forEach((c, i) => { const a = c.a + t * c.w * .08; m4.position.set(Math.cos(a) * c.r, c.y + Math.sin(t * c.w + i) * .4, Math.sin(a) * c.r - 4); m4.rotation.set(t * c.w + i, t * c.w * 1.3, i); m4.scale.set(c.s * .7, c.s, 1); m4.updateMatrix(); cards.setMatrixAt(i, m4.matrix); }); cards.instanceMatrix.needsUpdate = true;
-    for (const [pts, v] of [[petals, -.35], [embers, -.5]]) { const p = pts.geometry.attributes.position; for (let i = 0; i < p.count; i++) { let y = p.getY(i) + v * dt * (v === -.35 ? 1 : -1) * (.5 + (i % 5) * .2); if (pts === petals && y < 0) y = 12; if (pts === embers && y < -12) y = 0; p.setY(i, y); p.setX(i, p.getX(i) + Math.sin(t + i) * dt * .15); } p.needsUpdate = true; }
-    hands[0].rotation.z = -t * .05; hands[1].rotation.z = -Math.floor(t) * .1047;
+    const c = portrait ? TALL : CAM, d = (camera.userData.base || 13) + (camera.userData.dolly || 0);
+    pose(c, d, Math.sin(t * .13) * .3);
+    scenery.update(t, dt); vfx.update(dt, canvas.clientHeight);
     const pulse = .5 + .5 * Math.sin(t * 4);
     tiles.forEach((pair) => pair.forEach((f) => { if (f.goal.visible) f.goal.material.opacity = .6 + .4 * pulse; }));
     for (const g of pieces.values()) g.userData.body.position.y = g.userData.h / 2 - .03 + Math.sin(t * 1.6 + g.position.x * 2 + g.position.z) * .018;
-    final.uniforms.time.value = t; final.uniforms.punch.value = fx.punch; final.uniforms.hurt.value = fx.hurt;
-    final.uniforms.dark.value += ((flipped ? 1 : 0) - final.uniforms.dark.value) * .08; bloom.strength = .1 + final.uniforms.dark.value * .45; bloom.threshold = .93 - final.uniforms.dark.value * .33;
+    final.uniforms.time.value = t; final.uniforms.punch.value = fx.punch; final.uniforms.hurt.value = fx.hurt; final.uniforms.flash.value = fx.flash;
+    final.uniforms.dark.value += ((flipped ? 1 : 0) - final.uniforms.dark.value) * .08; bloom.strength = .14 + final.uniforms.dark.value * .3; bloom.threshold = .9 - final.uniforms.dark.value * .25;
     composer.render(); requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
