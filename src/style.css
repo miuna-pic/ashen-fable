@@ -40,9 +40,9 @@ body.mirror #flip { background: var(--paper); color: var(--ink); border-color: v
 #toast.show { animation: toast 3.2s forwards; }
 @keyframes toast { 0% { opacity: 0; translate: 0 10px; } 8%, 85% { opacity: 1; translate: 0 0; } 100% { opacity: 0; } }
 #banner { position: fixed; inset: 0; display: grid; place-content: center; text-align: center; pointer-events: none; opacity: 0; z-index: 5; color: #fff; }
-#banner::before { content: ''; position: absolute; left: -10%; right: -10%; top: 50%; height: clamp(150px, 30vh, 320px); transform: translateY(-50%) rotate(-4deg); background: var(--ink); border-block: 5px solid var(--blood); }
-#banner b { position: relative; font-weight: 900; font-size: clamp(64px, 14vw, 210px); line-height: 1; letter-spacing: -.02em; transform: rotate(-4deg) scaleY(1.2); text-shadow: 6px 6px 0 var(--blood); }
-#banner i { position: relative; font-weight: 900; font-size: clamp(10px, 1.3vw, 16px); letter-spacing: .5em; transform: rotate(-4deg); margin-top: 22px; color: var(--gold); }
+#banner::before { content: ''; position: absolute; left: -10%; right: -10%; top: 50%; height: clamp(84px, 17vh, 180px); transform: translateY(-50%) rotate(-4deg); background: var(--ink); border-block: 3px solid var(--blood); }
+#banner b { position: relative; font-weight: 900; font-size: clamp(40px, 7.5vw, 112px); line-height: 1; letter-spacing: -.02em; transform: rotate(-4deg) scaleY(1.15); text-shadow: 4px 4px 0 var(--blood); }
+#banner i { position: relative; font-weight: 900; font-size: clamp(10px, 1.3vw, 16px); letter-spacing: .5em; transform: rotate(-4deg); margin-top: 12px; color: var(--gold); }
 #banner.show { animation: banner 1.6s cubic-bezier(.2,.9,.2,1) forwards; }
 @keyframes banner { 0% { opacity: 0; clip-path: inset(0 100% 0 0); } 14% { opacity: 1; clip-path: inset(0 0 0 0); } 80% { opacity: 1; clip-path: inset(0 0 0 0); } 100% { opacity: 0; clip-path: inset(0 0 0 100%); } }
 #cutin { position: fixed; left: -5%; right: -5%; top: 26%; height: clamp(120px, 24vh, 240px); transform: rotate(-7deg); background: var(--blood); overflow: hidden; opacity: 0; pointer-events: none; z-index: 4; border-block: 4px solid #fff; }
@@ -75,10 +75,14 @@ body.mirror #cutin { background: #0a0508; border-color: var(--blood); }
 #begin { position: absolute; left: clamp(18px, 5vw, 90px); bottom: clamp(64px, 12vh, 120px); padding: 12px 54px; background: #fff; color: var(--ink); font-weight: 900; font-size: clamp(22px, 2.6vw, 38px); letter-spacing: .3em; transform: skewX(-12deg); box-shadow: 9px 9px 0 var(--blood); animation: pulse 1.8s infinite; }
 @keyframes pulse { 50% { box-shadow: 9px 9px 0 var(--blood), 0 0 0 12px rgba(255,255,255,.18); } }
 #title small { position: absolute; left: clamp(18px, 5vw, 90px); bottom: 24px; font-size: 11px; letter-spacing: .4em; opacity: .7; }
-@media (max-aspect-ratio: 4/5) {
+@media (max-aspect-ratio: 1/1) {
   .ink { max-width: 46vw; } .ink small { display: none; }
   .bottom { flex-wrap: wrap; } #flip { bottom: calc(max(16px, env(safe-area-inset-bottom)) + 52px); }
   .tools button { padding: 7px 8px; }
   #dialog img { height: 62vh; left: -8vw; } #dialog[data-who=b] img, #dialog[data-who=shadow] img { right: -8vw; }
   #title .art { background-position: 78% 50%; } #title .en { display: none; }
+}
+@media (max-aspect-ratio: 1/1) and (max-height: 560px) {
+  #flip { padding: 5px 22px; box-shadow: 5px 5px 0 var(--blood); } #flip b { font-size: 20px; } #flip i { display: none; }
+  .chapter h2 { font-size: 30px; }
 }

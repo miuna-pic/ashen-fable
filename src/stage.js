@@ -176,12 +176,13 @@ export function createStage(canvas) {
   const pose = (c, d, sway) => { camera.position.set(sway, Math.sin(c.pitch) * d, Math.cos(c.pitch) * d + c.back); camera.lookAt(0, c.ly - lift, c.lz); };
   function resize() {
     const w = canvas.clientWidth, h = canvas.clientHeight; if (!w || !h) return;
-    renderer.setSize(w, h, false); composer.setSize(w, h); camera.aspect = w / h; portrait = w / h < .8; const c = portrait ? TALL : CAM;
+    renderer.setSize(w, h, false); composer.setSize(w, h); camera.aspect = w / h; portrait = w / h < 1; const c = portrait ? TALL : CAM;
     camera.fov = c.fov; camera.updateProjectionMatrix();
     // tilt down, then pull back, until the near edge of the board clears whatever HUD sits at the bottom centre (the flip button)
+    // and the near corners of the frame are inside the window
     const hud = document.getElementById('flip')?.getBoundingClientRect(), limit = (hud && hud.height ? hud.top : h) - 6;
     let d = Math.max(c.dist, c.wide / (w / h));
-    const clear = () => { pose(c, d, 0); camera.updateMatrixWorld(); return (1 - edge.set(0, 0, H / 2).project(camera).y) / 2 * h <= limit; };
+    const clear = () => { pose(c, d, 0); camera.updateMatrixWorld(); return (1 - edge.set(0, 0, H / 2).project(camera).y) / 2 * h <= limit && Math.abs(edge.set(W / 2 + .9, 0, H / 2 + .9).project(camera).x) <= .98; };
     for (lift = 0; lift < 3 && !clear(); lift += .25);
     for (; d < 40 && !clear(); d += .25);
     camera.userData.base = d;
