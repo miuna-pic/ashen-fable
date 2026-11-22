@@ -70,7 +70,7 @@ export function createScenery(world) {
       vec2 r1 = vec2(sin(q.x * 1.7 + q.y * .6 + time * .5) + sin(q.x * 3.9 - q.y * 1.3 - time * .8) * .5,
                      sin(q.y * 1.9 - q.x * .5 + time * .4) + sin(q.y * 4.3 + q.x * 1.1 + time * .7) * .5);
       float ring = sin(sd * 5. - time * 1.1) * exp(-sd * .55);
-      vec3 n = normalize(vec3(r1.x * .012 * calm, 1., r1.y * .012 * calm + ring * .02));
+      vec3 n = normalize(vec3(r1.x * .012 * calm, 1., r1.y * .012 * calm + ring * (side > 0. ? .02 : .005)));
       n.y *= side;
       vec3 v = normalize(lp - lc), r = reflect(v, n);
       r.y = side * max(abs(r.y), .004);
@@ -108,7 +108,7 @@ export function createScenery(world) {
         hole = max(hole, -sd);
       }
       float inside = hole + (noise(g * 9.) - .5) * .09 + (noise(g * 23.) - .5) * .04;
-      if (inside > 0.) { if (side > 0.) discard; gl_FragColor = vec4(.03, .0, .012, .62); return; }   // from below, the daylight in a hole is dimmed
+      if (inside > 0.) { if (side > 0.) discard; gl_FragColor = vec4(.012, .0, .006, .93); return; }   // from below, the daylight in a hole is dimmed
       float rimHole = smoothstep(-.13, 0., inside);
 
       float edge = max(abs(f.x), abs(f.y)), aa = fwidth(g.x) + fwidth(g.y);

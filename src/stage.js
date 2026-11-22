@@ -49,10 +49,10 @@ const FINAL = {
       col = mix(vec3(lum), col, mix(1.12, 1.18, dark));
       vec3 lo = clamp(col, 0., 1.); col += (lo * lo * (3. - 2. * lo) - lo) * .55;        // gentle s-curve
       col *= mix(vec3(1.02, .99, 1.01), vec3(1.05, .96, .97), dark);
-      col = mix(col, vec3(lum) * vec3(1.,.12,.16) * 1.6, hurt);
+      col = mix(col, lum * lum * vec3(1.,.08,.12) * 1.25, hurt * .8);       // the kill drains the frame to blood without flattening it
       col *= 1. - r * mix(.5, 1.25, dark);
-      col += flash * mix(vec3(1., .97, .95), vec3(1., .25, .3), dark);
-      col += (h(u*900.)-.5) * .012;
+      col += flash * mix(vec3(1., .97, .95) * (1. - lum), vec3(1., .25, .3), dark);   // never past white on the bright side
+      col += (h(u*900.)-.5) * mix(.012, .007, dark);
       gl_FragColor = vec4(col,1.); }`,
 };
 
@@ -127,9 +127,9 @@ export function createStage(canvas) {
   async function flip(face) {
     busy++; const from = world.rotation.z, to = face ? Math.PI : 0; flipped = face;
     const side = face ? -1 : 1;
-    vfx.ring(mid, -side, face ? '#ffe9c8' : '#ff2a3c', 7, 700, 1, .05);
-    let swapped = false; await tween(900, (k) => { world.rotation.z = from + (to - from) * k; if (!swapped && k >= .5) { swapped = true; order(face); flare(face ? .1 : .16, 500); } fx.punch = Math.sin(k * Math.PI) * .7; camera.userData.dolly = Math.sin(k * Math.PI) * 2.6; });
-    vfx.ring(mid, side, face ? '#ff2a3c' : '#fff3d6', 8, 900, face ? 1 : .5, .04);
+    vfx.ring(mid, -side, face ? '#c9902f' : '#ff2a3c', 7, 700, face ? .1 : 1, .05);
+    let swapped = false; await tween(900, (k) => { world.rotation.z = from + (to - from) * k; if (!swapped && k >= .5) { swapped = true; order(face); flare(face ? .1 : .06, 500); } fx.punch = Math.sin(k * Math.PI) * .7; camera.userData.dolly = Math.sin(k * Math.PI) * 2.6; });
+    vfx.ring(mid, side, face ? '#ff2a3c' : '#c9902f', 8, 900, face ? 1 : .1, .035);
     for (let i = 0; i < 4; i++) vfx.burst(local([0, W - 1, W * (H - 1), W * H - 1][i]), side, { count: 14, speed: 1.4, up: 1.2, y: .2, life: 1.1, size: .09, g: -.6, colors: face ? HUE.ember : HUE.gold, add: face ? 1 : .5 });
     fx.punch = 0; busy--;
   }
@@ -151,7 +151,7 @@ export function createStage(canvas) {
         await tween(420, (k) => { g.userData.body.material.color.setScalar(1 + 6 * (1 - k)); g.scale.set(1 + k * .5, 1 - k, 1); }, out); g.visible = false; }
       if (e.t === 'shift') { const g = pieces.get(e.id), b = local(e.to); hooks.sfx('tick'); await hop(g, local(e.from), b, 240, .22); vfx.ring(b, g.userData.face ? -1 : 1, g.userData.face ? '#ff2a3c' : '#c21733', .8, 360); }
       if (e.t === 'strike') { const g = pieces.get(e.id), a = g.position.clone(), b = local(e.at); hooks.sfx('death');
-        await tween(170, (k) => { g.position.lerpVectors(a, b, k * .8); }, out); fx.hurt = 1; kick(.8, 700); flare(.35);
+        await tween(170, (k) => { g.position.lerpVectors(a, b, k * .8); }, out); fx.hurt = 1; kick(.8, 700); flare(.2);
         for (const side of [1, -1]) { vfx.ring(b, side, '#ff1030', 3.2, 800, side < 0 ? 1 : .2, .06); vfx.burst(b, side, { count: 44, speed: 3.6, up: .7, spread: 1.4, y: .6, h: .9, life: 1, size: .14, g: 4, colors: side < 0 ? HUE.ember : HUE.blood, add: side < 0 ? 1 : .05 }); }
         await tween(700, (k) => { alice.forEach((al) => { al.userData.body.rotation.z = k * 1.25; al.userData.body.position.y = al.userData.h / 2 - k * .4; }); g.position.lerpVectors(b, a, k).lerp(b, .8 * (1 - k)); }, out);
         await tween(500, (k) => { fx.hurt = 1 - k; }); }
