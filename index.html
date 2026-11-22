@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#04050c">
+  <title>余烬童话 · 安徒生篇</title>
+  <link rel="icon" href="./sigil.svg">
+  <link rel="preload" href="./noto-serif-sc.woff2" as="font" type="font/woff2" crossorigin>
+</head>
+<body>
+  <canvas id="stage"></canvas>
+  <div class="vignette"></div>
+
+  <div id="hud" hidden>
+    <header>
+      <div class="chapter"><b>第一夜</b><span>镜厅 · 雪后</span><i id="turn">第 1 回合</i></div>
+      <div class="queen"><span>雪后之心</span><div id="hearts"></div></div>
+      <nav>
+        <button id="btn-rules" aria-label="规则">规则</button>
+        <button id="btn-undo" aria-label="悔棋">悔棋</button>
+        <button id="btn-restart" aria-label="重来">重来</button>
+        <button id="btn-sound" aria-label="声音">♪</button>
+      </nav>
+    </header>
+    <div id="matches"><span class="label">火柴</span><div id="sticks"></div><b id="match-count">10</b></div>
+    <aside id="cards"></aside>
+    <footer>
+      <p id="hint"></p>
+      <button id="btn-strike" hidden>划一根火柴</button>
+    </footer>
+  </div>
+
+  <div id="floats"></div>
+  <div id="cutin" hidden><div class="band"></div><div class="face"></div><div class="words"><small></small><strong></strong><em></em></div></div>
+
+  <section id="title">
+    <div class="art"></div>
+    <div class="shade"></div>
+    <div class="logo">
+      <small>EMBER TALES — H. C. ANDERSEN LINE</small>
+      <h1>余烬童话</h1>
+      <h2>安徒生篇　第一夜「镜厅」</h2>
+      <p>一局棋，只有十根火柴那么长。</p>
+      <button id="btn-start">划亮第一根火柴</button>
+      <span class="foot">3D 黑童话棋 · 可玩提案切片 · 桌面 / 手机 / 平板</span>
+    </div>
+  </section>
+
+  <section id="rules" hidden>
+    <div class="sheet">
+      <h3>光即规则</h3>
+      <p class="lead">雪后坐在镜厅尽头。你只有三个付过代价的女孩，和十根火柴。<br>每回合动一人。击碎雪后的心三次，天就亮了。</p>
+      <ul>
+        <li><b class="c-fire">光里</b>敌人才会受伤；镜片进不了光；人鱼在光里不疼。</li>
+        <li><b class="c-ice">暗处</b>镜片走「日」字，落在谁身上就带走谁（<i class="k threat"></i> 是它们下一步能到的格子）。</li>
+        <li><b class="c-ice">冰</b>每回合蔓延（<i class="k frost"></i> 预告），火光能把它融掉。雪后每碎一次心就换一个王座，冰蔓延得更快。</li>
+      </ul>
+      <div class="trio">
+        <article><i style="background-image:url(./art/match.webp)"></i><h4>卖火柴的小女孩</h4><p>走一步；或<b>划火柴</b>：照亮周围两格，持续三回合。<br><em>代价：火柴烧完，夜就结束。</em></p></article>
+        <article><i style="background-image:url(./art/mermaid.webp)"></i><h4>小人鱼</h4><p>直线走任意格，落在光中的敌人身上将其击碎。<br><em>代价：暗处每格耗 1 声（冰 2）。声尽化为泡沫——留下一圈永不熄灭的光。</em></p></article>
+        <article><i style="background-image:url(./art/karen.webp)"></i><h4>红舞鞋的凯伦</h4><p>你只能给她方向。她<b>每回合自己跳两格</b>，撞墙反弹、冰上滑行，踏碎光中的敌人。<br><em>代价：停不下来。撞到同伴，同伴受伤。镜片抓不住她。</em></p></article>
+      </div>
+      <button id="btn-close">明白了</button>
+    </div>
+  </section>
+
+  <section id="result" hidden>
+    <div class="sheet">
+      <small id="result-kicker"></small>
+      <h3 id="result-title"></h3>
+      <p id="result-text"></p>
+      <p id="result-stats"></p>
+      <button id="btn-again">再来一夜</button>
+    </div>
+  </section>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
