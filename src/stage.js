@@ -253,7 +253,13 @@ export function createStage(canvas) {
     return { pitch: view.pitch, d: hi, tile: tileAt(0, w, h), far: tileAt(.5 - H / 2, w, h), deep: px(0, 0, 1 - H / 2, w, h)[1] - px(0, 0, -H / 2, w, h)[1], ox: (b.x0 + b.x1) / 4 * w - (s.l + fw / 2 - w / 2), oy: -(b.y0 + b.y1) / 4 * h - (s.t + fh / 2 - h / 2) };
   }
   // A figure leans back to face a steep camera. One hanging in the far world has to lean the other way, or it is seen edge-on.
-  const restyle = (g) => { if (g.userData.flat) return; g.userData.tilt.rotation.x = .16 - (g.userData.face === flipped ? view.lean : -view.lean - .1); g.userData.tilt.scale.setScalar(view.scale); };
+  // seen through the glass it would lie across the row in front, so it is set back by half its own length to sit over its square
+  const restyle = (g) => {
+    const u = g.userData; if (u.flat) return;
+    const near = u.face === flipped, a = view.lean + .1;
+    u.tilt.rotation.x = .16 - (near ? view.lean : -a); u.tilt.scale.setScalar(view.scale);
+    u.tilt.position.z = near ? 0 : -u.h * view.scale * (Math.sin(a) + Math.cos(a) / Math.tan(view.pitch)) / 2;
+  };
   function fit() {
     const w = canvas.clientWidth, h = canvas.clientHeight; if (!w || !h) return;
     camera.clearViewOffset(); camera.aspect = w / h; portrait = w / h < .8;
