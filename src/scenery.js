@@ -112,30 +112,61 @@ export function createScenery(world) {
   cellTex.magFilter = cellTex.minFilter = T.NearestFilter;
   const GLASS = /* glsl */`varying vec3 wp, wn; varying vec2 vuv; uniform float side; uniform sampler2D cells; uniform vec2 goal;
     float holeAt(vec2 c){ if (c.x < 0. || c.y < 0. || c.x >= ${W}. || c.y >= ${H}.) return 0.; return texture2D(cells, (c + .5) / vec2(${W}., ${H}.)).r; }
-    void main(){
-      vec3 lp = inv * wp, lc = inv * cameraPosition;
-      vec2 g = vec2(lp.x + ${W / 2}., lp.z + ${H / 2}.), c = floor(g), f = fract(g) - .5;
-      float chk = mod(c.x + c.y, 2.);
-      // jagged holes: distance to the nearest missing tile, roughened
-      float hole = -1.;
+    // how far inside a break a point of the board is (> 0 inside): the missing tiles, cut in straight shards rather
+    // than eaten away, two crossed sawtooths giving the edge its facets
+    float broken(vec2 g){
+      vec2 c = floor(g), f = fract(g) - .5; float hole = -1.;
       for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
         vec2 o = vec2(float(i), float(j)); if (holeAt(c + o) < .5) continue;
         vec2 d = abs(f - o) - .5; float sd = length(max(d, 0.)) + min(max(d.x, d.y), 0.);
         hole = max(hole, -sd);
       }
-      // the break is cut in straight shards, not eaten away: two crossed sawtooths give it facets
       float zig = abs(fract((g.x + g.y) * 2.5 + .2) - .5) + abs(fract((g.x - g.y) * 1.7 + .6) - .5);
-      float inside = hole + (zig - .5) * .11 - .02;
+      return hole + (zig - .5) * .11 - .02;
+    }
+    void main(){
+      vec3 lp = inv * wp, lc = inv * cameraPosition;
+      vec2 g = vec2(lp.x + ${W / 2}., lp.z + ${H / 2}.), c = floor(g), f = fract(g) - .5;
+      float chk = mod(c.x + c.y, 2.);
+      float inside = broken(g);
       if (inside > 0.) {
-        // a well into the other world: the cut face of the glass, then the far sky pooling below
-        float aw = fwidth(inside), face = 1. - smoothstep(.045, .045 + aw, inside), lip = 1. - smoothstep(.0, aw * 1.5, inside - .045);
-        float depth = smoothstep(.05, .5, inside), swirl = noise(g * 3. + vec2(time * .12, -time * .07));
-        vec3 cutA = mix(vec3(.62, .80, 1.), vec3(.20, .30, .72), smoothstep(0., .045, inside));        // surface: pale blue glass edge
-        vec3 cutB = mix(vec3(1., .30, .34), vec3(.30, .02, .07), smoothstep(0., .045, inside));        // mirror: ember edge
-        vec3 wellA = mix(vec3(.16, .05, .22), vec3(.05, .0, .04), depth) + vec3(.55, .04, .12) * swirl * depth * .5;   // looking down: dusk, then the red of the mirror
-        vec3 wellB = mix(vec3(.50, .56, .92), vec3(.96, .90, .98), depth) * (.75 + .25 * swirl);                        // looking up: daylight
-        vec3 well = side > 0. ? wellA : wellB, cutc = side > 0. ? cutA : cutB;
-        vec3 colh = mix(well, cutc, face) + (side > 0. ? vec3(.5, .6, 1.) : vec3(1., .25, .3)) * lip * .35;
+        // A hole through thick glass. The sight line is walked down through the slab: where it leaves the break it has
+        // met the cut wall, and where it comes out underneath it is looking into the other world.
+        const float DEEP = .34; const int STEPS = 7;
+        vec3 v = normalize(lp - lc); vec2 run = v.xz / max(abs(v.y), .12); run *= min(1., 1.5 / length(run));   // a low camera would see nothing but wall: the cut is never drawn longer than half a tile
+        float t = DEEP, prev = 0.; bool wall = false; vec2 q = g;
+        for (int i = 1; i <= STEPS; i++) {
+          float d = DEEP * float(i) / float(STEPS); q = g + run * d;
+          if (broken(q) <= 0.) { for (int k = 0; k < 4; k++) { t = (prev + d) * .5; if (broken(g + run * t) <= 0.) d = t; else prev = t; } wall = true; break; }
+          prev = d;
+        }
+        vec3 colh; float aw = fwidth(inside);
+        if (wall) {
+          q = g + run * t; float d = t / DEEP;
+          // each shard of the break catches the light differently, and the slab shows its layers
+          float facet = hash(floor(vec2((q.x + q.y) * 2.5 + .2, (q.x - q.y) * 1.7 + .6)));
+          float strata = smoothstep(.42, .5, abs(fract(d * 3. + facet * .3) - .5));
+          vec3 a = mix(vec3(.80, .90, 1.), vec3(.10, .16, .50), smoothstep(.0, .9, d)) * (.72 + .5 * facet);
+          a = mix(a, vec3(1., .86, .50), (1. - smoothstep(.10, .16, d)) * .9);                      // the gilt skin of the tile, seen edge on
+          a = mix(a, a * .72, strata) + vec3(.75, .05, .14) * smoothstep(.45, 1., d) * .55;         // the mirror's red creeping up the cut
+          vec3 b = mix(vec3(.30, .02, .05), vec3(.03, .0, .012), smoothstep(.0, .7, d)) * (.6 + .8 * facet);
+          b = mix(b, vec3(1., .30, .26), (1. - smoothstep(.10, .16, d)) * .9);                      // ember skin
+          b = mix(b, b * .5, strata) + vec3(.62, .70, 1.) * smoothstep(.6, 1., d) * .32;            // daylight spilling down the cut
+          colh = side > 0. ? a : b;
+        } else {
+          // the other world, some way off: its sky, and two layers of drifting cloud that slide against the rim
+          vec2 far = g + run * 1.6, mid = g + run * .8;
+          float c1 = noise(mid * 1.6 + vec2(time * .06, -time * .04)), c2 = noise(far * .9 - vec2(time * .03, time * .05));
+          vec3 sky = envAt(lp, normalize(vec3(v.x, v.y * .45, v.z)), 1.);
+          vec3 a = mix(vec3(.035, .0, .02), sky * .9, .45) + vec3(.85, .05, .12) * smoothstep(.45, .85, c1) * .55 + vec3(.35, .0, .10) * c2 * .5;
+          a += vec3(1., .55, .35) * step(.97, hash(floor(far * 30.))) * smoothstep(.45, .1, length(fract(far * 30.) - .5)) * (.5 + .5 * sin(time * 2. + far.x * 9.));   // embers far below
+          vec3 b = mix(vec3(.60, .70, 1.), sky, .5) + vec3(1., .96, .92) * smoothstep(.4, .8, c1) * .45 + vec3(.2, .2, .25) * c2;
+          // the slab shades the opening it frames
+          float sill = smoothstep(0., .16, broken(g + run * DEEP));
+          colh = side > 0. ? a * (.35 + .65 * sill) : b * (.6 + .4 * sill);
+        }
+        // a bright bevel where the top face meets the cut
+        colh = mix(colh, side > 0. ? vec3(1., .93, .68) : vec3(1., .42, .36), 1. - smoothstep(aw, aw * 2.5 + .012, inside));
         gl_FragColor = vec4(colh, 1.); return;
       }
       float rimHole = smoothstep(-.035, 0., inside);
