@@ -90,6 +90,7 @@ export function createStage(canvas) {
 
   // Pieces are standees: face 0 stands on the glass, face 1 hangs beneath it.
   const pieces = new Map(); const textures = {};
+  const hash = (n) => { const v = Math.sin(n * 127.1 + 3.7) * 43758.5453; return v - Math.floor(v); };
   function standee(name, face) {
     textures[name] ||= tex(name);
     const h = HEIGHT[name] || 1.34, g = new T.Group(), body = new T.Mesh(plane, new T.MeshBasicMaterial({ map: textures[name], transparent: true, alphaTest: .35, side: T.DoubleSide, toneMapped: false }));
@@ -100,7 +101,7 @@ export function createStage(canvas) {
   }
   // Whoever hangs in the far world is drawn over the glass with the see-through material.
   function order(face) {
-    for (const g of [...pieces.values(), ...corpses, ...(alice || [])]) { const near = g.userData.face === face; const u = g.userData; u.body.material = near ? u.here : u.far; u.body.renderOrder = near ? 0 : -2.5; u.shade.visible = near; }
+    for (const g of [...pieces.values(), ...corpses, ...(alice || [])]) { const near = g.userData.face === face; const u = g.userData; u.body.material = near ? u.here : u.far; u.body.renderOrder = near ? 0 : -2.5; u.shade.visible = near; restyle(g); }
     marks.forEach((m, side) => { m.visible = side === face; });
   }
   let alice = null, corpses = [], flipped = 0, state = null, busy = 0;
@@ -109,7 +110,15 @@ export function createStage(canvas) {
     clear(); state = st;
     alice = [standee('alice_a', 0), standee('alice_b', 1)]; alice.forEach((g) => g.position.copy(local(st.alice)));
     for (const e of st.enemies) { const g = standee(KINDS[e.kind].key, e.face); g.position.copy(local(e.at)); pieces.set(e.id, g); }
-    for (const c of st.corpses) for (const face of [0, 1]) { const g = standee('alice_a', face); g.position.copy(local(c)); const b = g.userData.body; b.material.color.set(face ? '#7a0d1c' : '#3b3340'); g.userData.far.uniforms.tint.value.copy(b.material.color); b.rotation.z = 1.25; b.scale.multiplyScalar(.8); b.position.set(.1, .34, 0); corpses.push(g); }
+    // A body left behind lies where it fell: flat on its square in a pool of ink, on both faces of the glass.
+    for (const c of st.corpses) for (const face of [0, 1]) {
+      const g = standee('alice_a', face), u = g.userData, b = u.body, turn = (hash(c * 7 + 3) - .5) * .9 + (hash(c) > .5 ? Math.PI / 2 : -Math.PI / 2);
+      u.flat = true; u.tilt.rotation.x = 0; u.tilt.scale.setScalar(1);
+      b.material.color.set(face ? '#d99aa6' : '#cfc6e6'); u.far.uniforms.tint.value.set(face ? '#8a5560' : '#8f86ad');
+      b.rotation.set(-Math.PI / 2, 0, turn); b.scale.multiplyScalar(.74); b.position.set(0, .03, 0);
+      u.shade.material.color.set(face ? '#000000' : '#2a0b2e'); u.shade.material.opacity = .92; u.shade.scale.setScalar(1.25); u.shade.position.y = .012;
+      g.position.copy(local(c)); corpses.push(g);
+    }
     scenery.setBoard(st); order(flipped);
     tiles.forEach((pair, s) => pair.forEach((f) => { f.goal.visible = s === st.goal; f.goal.material.map = GLYPH.goal; f.goal.material.color.set('#ffd774'); f.goal.material.opacity = .95; }));
   }
@@ -235,19 +244,21 @@ export function createStage(canvas) {
     for (let p = .44; p < 1.08; p += .04) { view.pitch = p; const f = frameAt(s, w, h); f.score = f.far * Math.min(1, f.deep / DEEP) * (1 - .15 * Math.max(0, p - .52)); if (!best || f.score > best.score) best = f; }
     return best;
   }
+  const TRIM = .4;   // how far the slim frame reaches past the squares
   function frameAt(s, w, h) {
     const fw = Math.max(120, w - s.l - s.r), fh = Math.max(120, h - s.t - s.b), head = 1.7 * view.scale;
-    const pts = []; for (const x of [-1, 1]) pts.push([x * (W / 2 + .15), 0, H / 2 + .15], [x * (W / 2 + .15), 0, -H / 2 - .15], [x * (W / 2 + .2), head, -H / 2 + .5], [x * W / 2, -.7, H / 2 - .5]);
+    const pts = []; for (const x of [-1, 1]) pts.push([x * (W / 2 + TRIM), 0, H / 2 + TRIM], [x * (W / 2 + TRIM), 0, -H / 2 - TRIM], [x * (W / 2 + .2), head, -H / 2 + .5], [x * W / 2, -.7, H / 2 - .5]);
     const box = (d) => { pose(d); let x0 = 9, x1 = -9, y0 = 9, y1 = -9; for (const p of pts) { projected.set(...p).project(camera); x0 = Math.min(x0, projected.x); x1 = Math.max(x1, projected.x); y0 = Math.min(y0, projected.y); y1 = Math.max(y1, projected.y); } return { x0, x1, y0, y1 }; };
     let lo = 3, hi = 90; for (let i = 0; i < 24; i++) { const d = (lo + hi) / 2, b = box(d); if ((b.x1 - b.x0) / 2 * w <= fw && (b.y1 - b.y0) / 2 * h <= fh) hi = d; else lo = d; }
     const b = box(hi);
     return { pitch: view.pitch, d: hi, tile: tileAt(0, w, h), far: tileAt(.5 - H / 2, w, h), deep: px(0, 0, 1 - H / 2, w, h)[1] - px(0, 0, -H / 2, w, h)[1], ox: (b.x0 + b.x1) / 4 * w - (s.l + fw / 2 - w / 2), oy: -(b.y0 + b.y1) / 4 * h - (s.t + fh / 2 - h / 2) };
   }
-  const restyle = (g) => { g.userData.tilt.rotation.x = .16 - view.lean; g.userData.tilt.scale.setScalar(view.scale); };
+  // A figure leans back to face a steep camera. One hanging in the far world has to lean the other way, or it is seen edge-on.
+  const restyle = (g) => { if (g.userData.flat) return; g.userData.tilt.rotation.x = .16 - (g.userData.face === flipped ? view.lean : -view.lean - .1); g.userData.tilt.scale.setScalar(view.scale); };
   function fit() {
     const w = canvas.clientWidth, h = canvas.clientHeight; if (!w || !h) return;
     camera.clearViewOffset(); camera.aspect = w / h; portrait = w / h < .8;
-    const c = frameCine(w, h); view.fit = !c.ok; let f = c;
+    const c = frameCine(w, h); view.fit = !c.ok; let f = c; scenery.setSlim(view.fit);
     if (view.fit) {
       for (const s of view.safe) { const g = frameIn(s, w, h); g.score *= s.weight || 1; if (f === c || g.score > f.score) f = g; }
       view.d = f.d; view.pitch = f.pitch; camera.setViewOffset(w, h, f.ox, f.oy, w, h); pose(f.d);

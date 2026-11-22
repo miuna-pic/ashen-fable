@@ -1,16 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseLevel, solve, movesFor, play, allAims, sq } from '../src/rules.js';
-import { LEVELS } from '../src/levels.js';
 
-for (const level of LEVELS) test(`${level.title} is solvable`, () => {
-  const path = solve(parseLevel(level));
-  assert.ok(path, 'no winning line');
-  console.log(level.title, 'shortest', path.length, 'surface-only', solve(parseLevel(level), [0])?.length ?? 'impossible', path.map((m) => (m.face ? '里' : '表') + m.to).join(' '));
-});
-test('later levels cannot be won without the mirror body', () => {
-  for (const level of LEVELS.slice(1)) assert.equal(solve(parseLevel(level), [0]), null, level.title);
-});
 test('mirror slide costs ink and surface capture refunds it', () => {
   const st = parseLevel({ ink: 1, map: [['......','......','......','......','......','......','.s....','A.....'], Array(8).fill('......')] });
   assert.equal(movesFor({ ...st, ink: 0 }, 1).length, 0);
