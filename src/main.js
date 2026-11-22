@@ -82,7 +82,9 @@ function hud() {
   if (mod.dark !== undefined) chips.push(`<button id="match" ${st.matches && !st.lit ? '' : 'disabled'}><i>火柴</i>${st.lit ? `还亮 <b>${st.lit}</b> 步` : `划一根 · 剩 <b>${st.matches}</b>`}</button>`);
   $('#chips').innerHTML = chips.join('');
   document.body.classList.toggle('dark', mod.dark !== undefined && !st.lit);
-  stage.paint(st, face, allowed(), shownAims(st), hint);
+  const can = allowed(), aims = shownAims(st), hot = new Set(aims.flatMap((a) => a.squares));
+  audio.setDanger(can.length ? can.filter((m) => hot.has(m.to)).length / can.length : 0);
+  stage.paint(st, face, can, aims, hint);
 }
 function banner(big, small, ms = 1500) { const b = $('#banner'); b.querySelector('b').textContent = big; b.querySelector('i').textContent = small; b.classList.remove('show'); void b.offsetWidth; b.classList.add('show'); return wait(ms); }
 function toast(text) { const t = $('#toast'); t.textContent = text; t.classList.remove('show'); void t.offsetWidth; t.classList.add('show'); }
@@ -102,7 +104,7 @@ function talk(lines) {
 async function enter(i, story = true) {
   locked = true; playing = true; index = i; hint = null; moves = 0; const level = LEVELS[i];
   if (face) { face = 0; audio.setMirror(0); await stage.flip(0); }
-  st = compile(level, graves[i]); stage.load(st);
+  st = compile(level, graves[i]); stage.load(st); audio.level({ id: level.id, boss: level.ch === 7 }, level.ch);
   if (story) { step = COACH[level.id] ? 0 : -1; say(); hud(); await banner(level.title, noOf(level) + ' · ' + level.sub, 1700); await talk(STORY[level.id]); }
   hud(); coach(); locked = false;
 }
@@ -189,6 +191,7 @@ addEventListener('keydown', (e) => { if (e.code === 'Space') { e.preventDefault(
 $('#retry').onclick = () => { if (!locked) { const keep = step; enter(index, false).then(() => { if (keep >= 0) { step = COACH[LEVELS[index].id].length - 1; coach(); } }); } };
 $('#clean').onclick = () => { if (!locked) { graves[index] = []; const keep = step; enter(index, false).then(() => { if (keep >= 0) { step = COACH[LEVELS[index].id].length - 1; coach(); } }); toast('遗骸被清走了'); } };
 $('#mute').onclick = () => { $('#mute').classList.toggle('off', audio.toggle()); };
+$('#mute').classList.toggle('off', audio.muted);
 $('#hint').onclick = async () => {
   if (locked) return;
   if (LEVELS[index].exam) return toast('柴郡猫：口试不许问兔子。');
