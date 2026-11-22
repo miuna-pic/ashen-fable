@@ -3,9 +3,9 @@ export const NAMES = {
   a: '爱丽丝', b: '镜中的爱丽丝', cat: '柴郡猫', queen: '红心女王', shadow: '女王之影', rook: '处刑人', soldier: '红心兵', hollow: '空壳兵',
   wk: '白骑士', cinder: '灰姑娘', match: '卖火柴的小女孩', egg: '蛋头先生', n: '', b2: '……',
 };
-export const ART = { a: 'alice_a', b: 'alice_b', cat: 'cat', queen: 'queen', shadow: 'shadow', rook: 'rook', soldier: 'soldier', hollow: 'hollow', wk: 'knight', b2: 'alice_b' };
-// 没有立绘的说话人，用一个大字代替脸。
-export const GLYPH = { cinder: '钟', match: '火', egg: '卵', n: '　' };
+export const ART = { a: 'alice_a', b: 'alice_b', cat: 'cat', queen: 'queen', shadow: 'shadow', rook: 'rook', soldier: 'soldier', hollow: 'hollow', wk: 'knight', cinder: 'cinder', match: 'match', egg: 'egg', b2: 'alice_b' };
+// 旁白没有脸。
+export const GLYPH = { n: '　' };
 
 export const RULES = {
   s: '红心兵 · 每拍朝你挪一格，砍四个斜角。从正面或侧面吃掉她。',
