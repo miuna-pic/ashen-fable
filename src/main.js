@@ -198,7 +198,7 @@ function update() {
   paint();
   const ai = isAI();
   const win = state.result;
-  const pending = state.echo && !win;
+  const pending = win ? null : state.echo;
   const whose = SIDES[state.side];
   get('turn-number').innerHTML = `${String(Math.min(state.turn,40)).padStart(2,'0')} <i>/</i> 40`;
   get('confirm').hidden = preview === null || !!win || ai;
