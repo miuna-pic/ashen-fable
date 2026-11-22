@@ -142,7 +142,7 @@ export function createCharacters({ world, shadow, placeholder }) {
 
   // Figures of the far world draw before the glass so it tints them; their ground shadow is hidden.
   function setNear(g, near) { const c = g.userData.char; c.near = near; c.shade.visible = near; c.rig.traverse((o) => { if (o.isMesh) o.renderOrder = (near ? 0 : -4) - (o.userData.ink ? 1 : 0); }); }
-  function remove(g) { const c = g.userData.char; if (!c) return; c.gone = true; live.delete(c); world.remove(g); c.g.traverse((o) => { if (o.material && o.material.isShaderMaterial) o.material.dispose(); }); }
+  function remove(g) { const c = g.userData.char; if (!c) return; c.gone = true; live.delete(c); world.remove(g); c.g.traverse((o) => { if (o.material) o.material.dispose(); }); }
 
   // Springs give every figure follow-through: the body arrives first, the hair and skirt catch up.
   function update(t, dt) {
