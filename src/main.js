@@ -116,6 +116,8 @@ canvas.addEventListener('pointerdown', (e) => {
 canvas.addEventListener('pointermove', (e) => { if (e.pointerId === held) show(e); });
 canvas.addEventListener('pointerup', (e) => { if (e.pointerId !== held) return; const s = show(e); drop(); if (s >= 0) tap(s); });
 canvas.addEventListener('pointercancel', drop);
+// A finger that lands anywhere else (a HUD button, a second finger) calls the move off.
+window.addEventListener('pointerdown', (e) => { if (held !== null && e.pointerId !== held) drop(); }, true);
 for (const type of ['contextmenu', 'gesturestart', 'dblclick']) addEventListener(type, (e) => e.preventDefault());
 
 // Tell the stage which parts of the screen the HUD leaves free: either the band between the top and bottom rows,
