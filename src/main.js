@@ -5,7 +5,7 @@ import './style.css';
 import './campaign.css';
 import { createStage } from './stage.js';
 import { audio } from './audio.js';
-import { enemyAt, MAX_INK, W } from './rules.js';
+import { enemyAt, MAX_INK, W, H } from './rules.js';
 import { compile, movesX, playX, solveX, shownAims, strike, bellIn, causeOf } from './modifiers.js';
 import { LEVELS, CHAPTERS } from './levels.js';
 import { STORY, AFTER, ENDING, PAGES, DEATH, COACH, NAMES, ART, GLYPH, RULES } from './story.js';
@@ -241,6 +241,9 @@ function layout() {
   const centred = { ...column, l: Math.max(column.l, column.r), r: Math.max(column.l, column.r) };
   stage.setSafe([band, centred, { ...column, weight: .85 }]);
   app.style.setProperty('--toast', `${band.b}px`);
+  // the clear strip either side of the board, for the landscape dialogue
+  const xs = [0, W - 1, W * (H - 1), W * H - 1].map((sq) => stage.project(sq).x);
+  document.documentElement.style.setProperty('--gap', `${Math.max(0, Math.min(Math.min(...xs), w - Math.max(...xs)) - stage.view.tile * .85)}px`);
 }
 addEventListener('resize', layout); addEventListener('orientationchange', () => setTimeout(layout, 300));
 document.fonts?.ready.then(layout);
@@ -267,3 +270,9 @@ $('#begin').onclick = async () => {
 };
 st = compile(LEVELS[0]); stage.load(st); hud();
 if (import.meta.env.DEV) window.__game = { stage, get tapped() { return tapped; }, get st() { return st; }, get idle() { return !locked && !stage.busy; }, get face() { return face; }, get step() { return step; }, save, enter, flip, move, showMap };
+// ?fps shows what this device is really getting: frame rate, drawing-buffer size and the quality step it settled on.
+if (new URLSearchParams(location.search).has('fps')) {
+  const el = document.body.appendChild(document.createElement('div')), c = $('#stage');
+  el.style.cssText = 'position:fixed;z-index:99;left:50%;top:max(4px,env(safe-area-inset-top));transform:translateX(-50%);padding:2px 8px;background:#000c;color:#fff;font:12px/1.4 monospace;pointer-events:none;white-space:nowrap';
+  setInterval(() => { const q = stage.quality; el.textContent = `${q.fps.toFixed(0)} fps · ${c.width}×${c.height} · step ${q.level}`; }, 500);
+}

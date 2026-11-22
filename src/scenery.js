@@ -43,6 +43,7 @@ const VERT = /* glsl */`
 const shader = (fragmentShader, uniforms = {}, extra = {}) => new T.ShaderMaterial({ uniforms: { ...U, ...uniforms }, vertexShader: VERT, fragmentShader: ENV + fragmentShader, toneMapped: false, ...extra });
 
 const R = 26;
+export const BACKDROP = 1;
 export function createScenery(world) {
   U.skyA.value = paint('sky_a'); U.skyB.value = paint('sky_b');
   const out = {};
@@ -57,7 +58,9 @@ export function createScenery(world) {
         c = mix(c, mix(vec3(1., .96, .95), vec3(.42, .02, .05), m), exp(-e * 110.) * mix(.55, .6, m));
         gl_FragColor = vec4(c, 1.); }`,
   }));
-  sky.renderOrder = -10; world.add(sky);
+  // The sky and the sea are the costly pixels and the soft ones: they live on their own layer so the stage can
+  // draw them into a smaller buffer than the board and the pieces (see stage.js, backdrop).
+  sky.renderOrder = -10; sky.layers.set(BACKDROP); world.add(sky);
 
   // Sea: a still mirror that reflects its own sky, with a hole where the board sits.
   const SEA = /* glsl */`varying vec3 wp, wn; uniform float side;
@@ -97,7 +100,11 @@ export function createScenery(world) {
     }`;
   for (const side of [1, -1]) {
     const sea = new T.Mesh(new T.CircleGeometry(R * 1.003, 128), shader(SEA, { side: { value: side } }));
-    sea.rotation.x = -side * Math.PI / 2; sea.renderOrder = -9; world.add(sea);
+    sea.rotation.x = -side * Math.PI / 2; sea.renderOrder = -9; sea.layers.set(BACKDROP); world.add(sea);
+    // the water still has to hide what hangs in the other world, so it leaves its depth in the main pass
+    const mask = new T.Mesh(sea.geometry, new T.ShaderMaterial({ colorWrite: false, vertexShader: 'varying vec2 q; void main(){ q = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }',
+      fragmentShader: `varying vec2 q; void main(){ if (abs(q.x) < ${(W / 2 + .12).toFixed(2)} && abs(q.y) < ${(H / 2 + .12).toFixed(2)}) discard; gl_FragColor = vec4(0.); }` }));
+    mask.rotation.copy(sea.rotation); mask.renderOrder = -9; world.add(mask);
   }
 
   // Board glass: one sheet per face. You see the other world, and whoever hangs in it, through the tiles.
