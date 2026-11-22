@@ -8,6 +8,7 @@ i { font-style: normal; }
 .hud { position: fixed; left: 0; right: 0; display: flex; justify-content: space-between; align-items: flex-start; padding: max(14px, env(safe-area-inset-top)) clamp(14px, 3vw, 40px); pointer-events: none; transition: color .6s; z-index: 2; }
 .hud > * { pointer-events: auto; }
 .top { top: 0; }
+.top > * { pointer-events: none; }   /* labels only: taps go through to the board behind them */
 .chapter b { display: inline-block; font-weight: 900; font-size: clamp(11px, 1.2vw, 15px); letter-spacing: .5em; background: var(--fg); color: var(--paper); padding: 3px 4px 3px 10px; }
 body.mirror .chapter b { color: #14080d; }
 .chapter h2 { font-weight: 900; font-size: clamp(38px, 6.4vw, 92px); line-height: .95; letter-spacing: -.04em; margin-top: 6px; transform: scaleY(1.18); transform-origin: top left; }
@@ -62,7 +63,7 @@ body.mirror #cutin { background: #0a0508; border-color: var(--blood); }
 #dialog div i { position: absolute; right: 16px; bottom: 8px; font-size: 11px; letter-spacing: .3em; opacity: .55; animation: blink 1s infinite; }
 @keyframes blink { 50% { opacity: .15; } }
 #title { position: fixed; inset: 0; z-index: 9; background: #0a0508; color: #fff; overflow: hidden; transition: opacity .9s, visibility .9s, transform .9s; }
-#title.gone { opacity: 0; visibility: hidden; transform: scale(1.25); }
+#title.gone { opacity: 0; visibility: hidden; pointer-events: none; transform: scale(1.25); }
 #title .art { position: absolute; inset: 0; background: center / cover;background-position: 72% 50%; animation: drift 24s ease-in-out infinite alternate; }
 @keyframes drift { from { transform: scale(1.04); } to { transform: scale(1.14) translateX(-1.5%); } }
 #title .veil { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(10,5,8,.55), transparent 55%), linear-gradient(transparent 60%, rgba(10,5,8,.7)); }
@@ -107,8 +108,10 @@ body.mirror #cutin { background: #0a0508; border-color: var(--blood); }
   #flip { left: auto; right: max(16px, env(safe-area-inset-right)); bottom: max(14px, env(safe-area-inset-bottom)); transform: skewX(-12deg); padding: 8px 26px; box-shadow: 6px 6px 0 var(--blood); }
   #flip:active { transform: skewX(-12deg) translate(4px, 4px); }
   #flip b { font-size: 26px; }
-  #dialog > div { padding: 22px 20px 26px; margin-bottom: max(12px, env(safe-area-inset-bottom)); width: min(880px, 76vw); } #dialog p { font-size: 15px; line-height: 1.6; min-height: 3.2em; }
-  #dialog img { height: 96vh; }
+  #dialog { background: linear-gradient(transparent 60%, rgba(10,3,6,.8)); }
+  #dialog > div { padding: 16px 18px 14px; margin-bottom: max(8px, env(safe-area-inset-bottom)); width: min(880px, 72vw); border-top-width: 4px; box-shadow: 8px 8px 0 var(--ink); } #dialog p { font-size: 14px; line-height: 1.5; min-height: 1.5em; padding-right: 5em; }
+  #dialog b { top: -16px; font-size: 13px; padding: 2px 12px; } #dialog div i { bottom: 6px; font-size: 10px; }
+  #dialog img { height: 84vh; }
   #banner::before { height: 46vh; } #banner b { font-size: 26vh; }
   #title h1 { font-size: clamp(48px, 19vh, 130px); top: 7vh; } #title .tag { bottom: 31vh; font-size: 13px; line-height: 1.7; } #begin { bottom: 13vh; font-size: 20px; padding: 9px 42px; } #title small { bottom: 10px; }
 }
