@@ -70,24 +70,33 @@ export function createScenery(world) {
       vec2 r1 = vec2(sin(q.x * 1.7 + q.y * .6 + time * .5) + sin(q.x * 3.9 - q.y * 1.3 - time * .8) * .5,
                      sin(q.y * 1.9 - q.x * .5 + time * .4) + sin(q.y * 4.3 + q.x * 1.1 + time * .7) * .5);
       float ring = sin(sd * 5. - time * 1.1) * exp(-sd * .55);
-      vec3 n = normalize(vec3(r1.x * .012 * calm, 1., r1.y * .012 * calm + ring * (side > 0. ? .02 : .005)));
+      // long swells seen edge-on: they slice a reflection into horizontal bands instead of letting it hang like a curtain
+      float far = smoothstep(4., 20., dist);
+      float swell = (noise(vec2(q.x * .35 + time * .05, q.y * 2.6 - time * .22)) - .5) + (noise(vec2(q.x * .9 - time * .08, q.y * 7. + time * .3)) - .5) * .5;
+      vec3 n = normalize(vec3(r1.x * .012 * calm, 1., r1.y * .012 * calm + ring * (side > 0. ? .02 : .005) + swell * mix(.02, .09, far) * (side > 0. ? 1. : .3)));
       n.y *= side;
       vec3 v = normalize(lp - lc), r = reflect(v, n);
       r.y = side * max(abs(r.y), .004);
       float f = pow(1. - clamp(dot(-v, n), 0., 1.), 3.);
       vec3 sky = envAt(lp, r, 1. + 3. * clamp(abs(r.y) * 2.2, 0., 1.));
-      vec3 deep = side > 0. ? vec3(.62, .62, .86) : vec3(.016, .004, .010);
-      vec3 col = side > 0. ? mix(deep, sky * vec3(.93, .93, 1.), .5 + .5 * f) : mix(deep, sky * .8, .35 + .65 * f);
+      vec3 deep = side > 0. ? mix(vec3(.20, .30, .72), vec3(.42, .47, .86), far) : vec3(.016, .004, .010);
+      vec3 col = side > 0. ? mix(deep, sky * vec3(.90, .92, 1.), clamp(.16 + 1.1 * f, 0., 1.)) : mix(deep, sky * .6, .3 + .7 * f);
+      // sun glitter: short bright dashes riding the swells, thickest toward the castle
+      float gl = noise(vec2(q.x * 1.6 + time * .2, q.y * 16. - time * .9)) * noise(vec2(q.x * 5. - time * .3, q.y * 3.));
+      gl = smoothstep(.46, .58, gl) * smoothstep(1.2, 4., sd) * (.25 + .75 * smoothstep(.2, -1., v.x * v.x * 3. + v.z));
+      col += vec3(1., .97, .92) * .55 * gl * step(0., side);
       // the board's own shade and a thin lit waterline around the frame
-      col *= 1. - exp(-sd * 1.3) * (side > 0. ? .38 : .55);
+      col *= 1. - exp(-sd * 1.1) * (side > 0. ? .5 : .55);
       col += (side > 0. ? vec3(1., .95, .9) : vec3(1., .12, .16)) * exp(-sd * 9.) * .35;
       // dissolve into the horizon
       vec3 hz = env(normalize(vec3(v.x, side * .012, v.z)));
       col = mix(col, hz, smoothstep(R * .55, R * .985, length(q)));
+      // a band of mist where water meets sky
+      col = mix(col, side > 0. ? vec3(1., .95, .96) : vec3(.30, .01, .04), smoothstep(R * .7, R, length(q)) * (side > 0. ? .5 : .25));
       gl_FragColor = vec4(col, 1.);
     }`;
   for (const side of [1, -1]) {
-    const sea = new T.Mesh(new T.CircleGeometry(R - .05, 96), shader(SEA, { side: { value: side } }));
+    const sea = new T.Mesh(new T.CircleGeometry(R * 1.003, 128), shader(SEA, { side: { value: side } }));
     sea.rotation.x = -side * Math.PI / 2; sea.renderOrder = -9; world.add(sea);
   }
 
@@ -153,6 +162,27 @@ export function createScenery(world) {
     glass.forEach((m) => m.material.uniforms.goal.value.set(X(st.goal), Y(st.goal)));
   };
 
+  // Whoever stands in the far world, seen through the glass: washed toward that world's colour, dimmed along the
+  // tile seams, and clear through a hole.
+  const THROUGH = /* glsl */`varying vec3 wp; varying vec2 vuv; uniform sampler2D map, cells; uniform vec3 tint;
+    void main(){
+      vec3 lp = inv * wp, lc = inv * cameraPosition;
+      vec3 hit = lc + (lp - lc) * (lc.y / (lc.y - lp.y));
+      vec2 g = hit.xz + vec2(${W / 2}., ${H / 2}.);
+      if (g.x < 0. || g.y < 0. || g.x > ${W}. || g.y > ${H}.) discard;
+      vec4 c = texture2D(map, vuv + vec2(sin(vuv.y * 26. + time * 1.6) * .005, 0.));
+      if (c.a < .35) discard;
+      c.rgb *= tint;
+      float lum = dot(c.rgb, vec3(.3, .6, .1)), hole = texture2D(cells, (floor(g) + .5) / vec2(${W}., ${H}.)).r;
+      vec2 f = abs(fract(g) - .5); float seam = smoothstep(.43, .5, max(f.x, f.y));
+      // from the surface the mirror folk are dark shapes under ice; from the mirror the surface folk are pale lights overhead
+      vec3 under = mix(c.rgb, vec3(.34, .03, .14) * (.35 + lum), .5), over = mix(c.rgb, vec3(1.05, .93, .98) * (.55 + .6 * lum), .5) * 1.15;
+      vec3 col = lc.y > 0. ? under : over; float a = lc.y > 0. ? .78 : .74;
+      col = mix(col, c.rgb, hole); a = mix(a * (1. - seam * .55), 1., hole);
+      gl_FragColor = vec4(col, a);
+    }`;
+  out.through = (map) => shader(THROUGH, { map: { value: map }, cells: { value: cellTex }, tint: { value: new T.Color(1, 1, 1) } }, { transparent: true, depthWrite: false, side: T.DoubleSide });
+
   // Frame: gilt above the glass, thorned iron beneath it. One object, two skins.
   const METAL = /* glsl */`varying vec3 wp, wn; uniform float glow, gilt;
     void main(){
@@ -168,7 +198,7 @@ export function createScenery(world) {
       float cut = (1. - smoothstep(.20, .23, band)) * smoothstep(.10, .13, band) + (1. - smoothstep(.0, .012, abs(across - .13))) + (1. - smoothstep(.0, .012, abs(across - .43)));
       cut *= step(.9, abs(n.y)) * step(.06, across) * (1. - gilt);
       vec3 goldc = vec3(.93, .62, .25) * (.25 + .6 * key + .2 * up) + sky * vec3(1., .8, .5) * (.15 + .6 * fr) + pow(key, 24.) * .8;
-      vec3 porc = vec3(.97, .94, .95) * (.62 + .3 * key + .12 * up) + sky * (.06 + .5 * fr);
+      vec3 porc = vec3(.045, .07, .26) * (.55 + .6 * key + .2 * up) + sky * (.02 + .3 * fr) + pow(key, 30.) * .5;   // sapphire enamel
       vec3 gold = mix(mix(porc, goldc, clamp(cut, 0., 1.)), goldc, gilt);
       vec3 emberc = vec3(1., .10, .14) * (.55 + .45 * sin(time * 1.3 + along * 1.7));
       vec3 obs = vec3(.035, .014, .022) * (.6 + key) + sky * vec3(1., .45, .45) * (.08 + .8 * fr) + vec3(1., .1, .14) * pow(key, 16.) * .5;
@@ -215,7 +245,7 @@ export function createScenery(world) {
   const hands = [[15, .34], [22, .2]].map(([l, w]) => { const m = new T.Mesh(new T.PlaneGeometry(w, l).translate(0, l / 2 - 1.5, 0), clockMat); clock.add(m); return m; });
   clock.traverse((o) => { o.renderOrder = -8; });
 
-  // Drifting things. Cards and petals above; torn cards and embers below.
+  // Drifting things. Cards and petals above; torn cards and embers below. Cards orbit behind the board, never between it and the camera.
   const card = (ink, paper, back) => {
     const c = document.createElement('canvas'); c.width = 128; c.height = 180; const g = c.getContext('2d');
     g.fillStyle = paper; g.beginPath(); g.roundRect(3, 3, 122, 174, 12); g.fill(); g.strokeStyle = ink; g.lineWidth = 2; g.beginPath(); g.roundRect(10, 10, 108, 160, 8); g.stroke();
@@ -245,7 +275,9 @@ export function createScenery(world) {
   const m4 = new T.Object3D();
   out.update = (t, dt) => {
     U.time.value = t; world.updateMatrixWorld(); U.inv.value.setFromMatrix4(world.matrixWorld).invert();
-    for (const d of decks) { d.mine.forEach((c, i) => { const a = c.a + t * c.w * .05; m4.position.set(Math.cos(a) * c.r, d.side * (c.y + Math.sin(t * c.w + c.a) * .4), Math.sin(a) * c.r * .8 - 6); m4.rotation.set(t * c.w * .6 + c.a, t * c.w * .8, c.a); m4.scale.setScalar(c.s); m4.updateMatrix(); d.meshes.forEach((m) => m.setMatrixAt(i, m4.matrix)); }); d.meshes.forEach((m) => { m.instanceMatrix.needsUpdate = true; }); }
+    // drifting things belong to their own world: seen through the glass they only litter the board
+    const below = Math.cos(world.rotation.z) < 0; decks.forEach((d) => d.meshes.forEach((m) => { m.visible = (d.side < 0) === below; })); petals.visible = !below; embers.visible = below;
+    for (const d of decks) { d.mine.forEach((c, i) => { const a = c.a + t * c.w * .05; m4.position.set(Math.cos(a) * c.r, d.side * (c.y + 1.2 + Math.sin(t * c.w + c.a) * .4), -7 - (.5 + .5 * Math.sin(a)) * c.r * .8); m4.rotation.set(t * c.w * .6 + c.a, t * c.w * .8, c.a); m4.scale.setScalar(c.s); m4.updateMatrix(); d.meshes.forEach((m) => m.setMatrixAt(i, m4.matrix)); }); d.meshes.forEach((m) => { m.instanceMatrix.needsUpdate = true; }); }
     pseed.forEach((p, i) => { p.y -= p.v * dt; if (p.y < .02) p.y = 11; m4.position.set(p.x + Math.sin(t * .6 + i) * .7, p.y, p.z + Math.cos(t * .4 + i * 2.) * .5); m4.rotation.set(t * p.v * 2 + i, t * p.v * 1.4, i); m4.scale.setScalar(p.s); m4.updateMatrix(); petals.setMatrixAt(i, m4.matrix); }); petals.instanceMatrix.needsUpdate = true;
     const ep = eg.attributes.position; for (let i = 0; i < E; i++) { let y = ep.getY(i) - dt * (.25 + (i % 5) * .12); if (y < -11) y = -.05; ep.setY(i, y); ep.setX(i, ep.getX(i) + Math.sin(t * .8 + i) * dt * .12); } ep.needsUpdate = true;
     hands[0].rotation.z = -t * .02 + 2.2; hands[1].rotation.z = -Math.floor(t) * (Math.PI / 30);

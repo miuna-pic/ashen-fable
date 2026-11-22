@@ -95,20 +95,20 @@ export function createStage(canvas) {
     body.scale.set(h * ASPECT[name], h, 1); body.position.y = h / 2 - .03; body.rotation.x = -.16;
     const shade = lay(flat(GLYPH.blob, face ? '#ff1d3a' : '#27304d', face ? .5 : .45), 0, .95); shade.position.y = .004;
     const tilt = new T.Group(); tilt.add(body); tilt.rotation.x = .16 - view.lean; tilt.scale.setScalar(view.scale);
-    const inner = new T.Group(); inner.add(tilt, shade); if (face) inner.rotation.z = Math.PI; g.add(inner); g.userData = { body, inner, tilt, h, face, shade }; world.add(g); return g;
+    const inner = new T.Group(); inner.add(tilt, shade); if (face) inner.rotation.z = Math.PI; g.add(inner); g.userData = { body, inner, tilt, h, face, shade, here: body.material, far: scenery.through(textures[name]) }; world.add(g); return g;
   }
-  // Whoever hangs in the far world is drawn before the glass, so the board tints them like a reflection.
+  // Whoever hangs in the far world is drawn over the glass with the see-through material.
   function order(face) {
-    for (const g of [...pieces.values(), ...corpses, ...(alice || [])]) { const near = g.userData.face === face; g.userData.body.renderOrder = near ? 0 : -4; g.userData.shade.visible = near; }
+    for (const g of [...pieces.values(), ...corpses, ...(alice || [])]) { const near = g.userData.face === face; const u = g.userData; u.body.material = near ? u.here : u.far; u.body.renderOrder = near ? 0 : -2.5; u.shade.visible = near; }
     marks.forEach((m, side) => { m.visible = side === face; });
   }
   let alice = null, corpses = [], flipped = 0, state = null, busy = 0;
-  const clear = () => { for (const g of [...pieces.values(), ...corpses, ...(alice || [])]) world.remove(g); pieces.clear(); corpses = []; alice = null; };
+  const clear = () => { for (const g of [...pieces.values(), ...corpses, ...(alice || [])]) { world.remove(g); g.userData.here.dispose(); g.userData.far.dispose(); } pieces.clear(); corpses = []; alice = null; };
   function load(st) {
     clear(); state = st;
     alice = [standee('alice_a', 0), standee('alice_b', 1)]; alice.forEach((g) => g.position.copy(local(st.alice)));
     for (const e of st.enemies) { const g = standee(KINDS[e.kind].key, e.face); g.position.copy(local(e.at)); pieces.set(e.id, g); }
-    for (const c of st.corpses) for (const face of [0, 1]) { const g = standee('alice_a', face); g.position.copy(local(c)); const b = g.userData.body; b.material.color.set(face ? '#7a0d1c' : '#3b3340'); b.rotation.z = 1.25; b.scale.multiplyScalar(.8); b.position.set(.1, .34, 0); corpses.push(g); }
+    for (const c of st.corpses) for (const face of [0, 1]) { const g = standee('alice_a', face); g.position.copy(local(c)); const b = g.userData.body; b.material.color.set(face ? '#7a0d1c' : '#3b3340'); g.userData.far.uniforms.tint.value.copy(b.material.color); b.rotation.z = 1.25; b.scale.multiplyScalar(.8); b.position.set(.1, .34, 0); corpses.push(g); }
     scenery.setBoard(st); order(flipped);
     tiles.forEach((pair, s) => pair.forEach((f) => { f.goal.visible = s === st.goal; f.goal.material.map = GLYPH.goal; f.goal.material.color.set('#ffd774'); f.goal.material.opacity = .95; }));
   }
@@ -136,7 +136,7 @@ export function createStage(canvas) {
     const side = face ? -1 : 1;
     vfx.ring(mid, -side, face ? '#c9902f' : '#ff2a3c', 7, 700, face ? .1 : 1, .05);
     let swapped = false; await tween(900, (k) => { world.rotation.z = from + (to - from) * k; if (!swapped && k >= .5) { swapped = true; order(face); flare(face ? .1 : .06, 500); } fx.punch = Math.sin(k * Math.PI) * .7; camera.userData.dolly = Math.sin(k * Math.PI) * 2.6; });
-    vfx.ring(mid, side, face ? '#ff2a3c' : '#c9902f', 8, 900, face ? 1 : .1, .035);
+    vfx.ring(mid, side, face ? '#8f1420' : '#c9902f', 6.5, 800, face ? 1 : .1, .025);
     for (let i = 0; i < 4; i++) vfx.burst(local([0, W - 1, W * (H - 1), W * H - 1][i]), side, { count: 14, speed: 1.4, up: 1.2, y: .2, life: 1.1, size: .09, g: -.6, colors: face ? HUE.ember : HUE.gold, add: face ? 1 : .5 });
     fx.punch = 0; busy--;
   }
@@ -155,7 +155,7 @@ export function createStage(canvas) {
         vfx.ring(at, side, e.face ? '#ffffff' : '#ff1f3d', 2.4, 600, e.face ? 1 : .3, .07);
         vfx.burst(at, side, { count: 46, speed: 3.4, up: .5, spread: 1.2, y: .7, h: 1, life: .8, size: .13, g: 5, colors: e.face ? HUE.ghost : HUE.blood, add: e.face ? 1 : .05 });
         vfx.burst(at, side, { count: 14, speed: 1.2, up: 1.5, y: .6, life: 1.3, size: .2, g: -.5, colors: e.face ? HUE.ember : HUE.gold, add: e.face ? 1 : .5 });
-        await tween(420, (k) => { g.userData.body.material.color.setScalar(1 + 6 * (1 - k)); g.scale.set(1 + k * .5, 1 - k, 1); }, out); g.visible = false; }
+        await tween(420, (k) => { g.userData.here.color.setScalar(1 + 6 * (1 - k)); g.scale.set(1 + k * .5, 1 - k, 1); }, out); g.visible = false; }
       if (e.t === 'shift') { const g = pieces.get(e.id), b = local(e.to); hooks.sfx('tick'); await hop(g, local(e.from), b, 240, .22); vfx.ring(b, g.userData.face ? -1 : 1, g.userData.face ? '#ff2a3c' : '#c21733', .8, 360); }
       if (e.t === 'strike') { const g = pieces.get(e.id), a = g.position.clone(), b = local(e.at); hooks.sfx('death');
         await tween(170, (k) => { g.position.lerpVectors(a, b, k * .8); }, out); fx.hurt = 1; kick(.8, 700); flare(.2);
@@ -164,7 +164,7 @@ export function createStage(canvas) {
         await tween(500, (k) => { fx.hurt = 1 - k; }); }
       if (e.t === 'win') { hooks.sfx('win'); const at = alice[0].position; flare(.3, 900);
         for (const side of [1, -1]) { vfx.ring(at, side, side > 0 ? '#ffd774' : '#ffb04a', 3.5, 1000, side < 0 ? 1 : .6, .05); vfx.burst(at, side, { count: 60, speed: 1.3, up: 2.4, spread: 2, y: .3, h: .4, r: .7, life: 1.6, size: .13, g: -1.2, drag: .8, colors: HUE.gold, add: side < 0 ? 1 : .6 }); }
-        await tween(700, (k) => { alice.forEach((g) => { g.userData.inner.position.y = k * 1.2; g.userData.body.material.color.setScalar(1 + k * 4); }); fx.punch = k * .5; }); fx.punch = 0; }
+        await tween(700, (k) => { alice.forEach((g) => { g.userData.inner.position.y = k * 1.2; g.userData.here.color.setScalar(1 + k * 4); }); fx.punch = k * .5; }); fx.punch = 0; }
     }
     busy--;
   }
