@@ -161,6 +161,7 @@ footer { position: absolute; left: 50%; bottom: calc(18px + var(--safe-b)); tran
 /* 规则页的按钮始终可见：内容可滚动，按钮吸底 */
 #rules .sheet { display: flex; flex-direction: column; padding-bottom: 0; }
 #rules .sheet > button { position: sticky; bottom: 0; align-self: center; flex: none; margin: 4px 0 clamp(14px, 3vw, 28px); z-index: 1; }
-#rules .sheet::after { content: ''; position: sticky; bottom: 0; flex: none; height: 0; box-shadow: 0 0 40px 60px rgba(6, 7, 16, .96); order: 0; }
+#rules .sheet::after { content: ''; position: sticky; bottom: 0; flex: none; height: 0; box-shadow: 0 0 10px 8px rgba(6, 7, 16, .96); order: 0; }
+#rules .trio i { height: 84px; } #rules .sheet h3 { font-size: clamp(30px, 5vw, 48px); }
 #rules .sheet > button { order: 1; }
 #rules .trio { margin-bottom: 10px; }
