@@ -5,7 +5,8 @@ const BASE = (import.meta.env?.BASE_URL ?? './') + 'audio/';
 const SFX = ['step', 'slide', 'tick', 'flip', 'kill', 'death', 'win', 'ui', 'dialog', 'banner', 'warn'];
 const CUE_OF = { 'rabbit-hole': 'rabbit', tea: 'tea', croquet: 'croquet', trial: 'trial' };
 const ROTATION = ['rabbit', 'tea', 'croquet'];
-const VOL = { music: .8, sfx: .9 };
+// One-shots are rendered level with the score (tools/audio/sfx.py sets each one's loudness), so both buses share a gain.
+const VOL = { music: .8, sfx: .8 };
 const store = typeof localStorage === 'undefined' ? null : localStorage;
 
 let ctx, master, music, fx, score = null, cue = null, wanted = 'title', token = 0;
@@ -89,8 +90,8 @@ function footstep(slide) {
   const c = clock(), pcs = c ? cue.meta.chords[mirror ? 1 : 0][c.bar] : [2, 5, 9];
   if (c && c.bar !== lastBar) { lastBar = c.bar; arp = 0; }
   const when = c && c.wait < .09 ? c.wait : 0, note = stepNote(pcs, arp++, mirror);
-  if (slide) { shot('slide', { rate: 2 ** ((((pcs[0] - 2 + 18) % 12) - 6) / 12), gain: .9, when }); shot('step', { rate: 2 ** ((note - 74) / 12), gain: .35, when: when + .28, pan: -.2 }); }
-  else shot('step', { rate: 2 ** ((note - 74) / 12), gain: .8, when, pan: .15 });
+  if (slide) { shot('slide', { rate: 2 ** ((((pcs[0] - 2 + 18) % 12) - 6) / 12), when }); shot('step', { rate: 2 ** ((note - 74) / 12), gain: .5, when: when + .28, pan: -.2 }); }
+  else shot('step', { rate: 2 ** ((note - 74) / 12), when, pan: .15 });
 }
 // Interface sounds are wired from here so the game code does not have to know about them.
 function wire() {
@@ -131,9 +132,9 @@ export const audio = {
     if (name === 'banner' && ctx.currentTime < quietUntil) return;
     if (name === 'flip') duck(.55, .5, 1.2);
     if (name === 'kill') duck(.7, .3, .8);
-    if (name === 'death') { duck(.12, 2.6, 2.5); quietUntil = ctx.currentTime + 3; }
+    if (name === 'death') { duck(.15, 1.6, 2); quietUntil = ctx.currentTime + 2.5; }
     if (name === 'win') { duck(.1, 5, 2.5); quietUntil = ctx.currentTime + 6; }
-    shot(name, { gain: name === 'ui' || name === 'dialog' ? .6 : 1 });
+    shot(name);
   },
   /** For the sound test and for tests: what is playing. */
   get state() { return { cue: cue?.name ?? null, wanted, mirror, danger, muted, running: ctx?.state === 'running', clock: ctx && cue ? clock() : null }; },
