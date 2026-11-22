@@ -157,7 +157,8 @@ export function createCharacters({ world, shadow, placeholder }) {
       u.uLag.value.copy(c.lag).divideScalar(c.h);
       u.uTime.value = t; u.uSquash.value = pose.squash; u.uTwist.value = pose.twist; u.uLean.value.set(pose.lean.x * (c.face ? -1 : 1), pose.lean.y);
       u.uFlash.value = pose.flash; u.uDissolve.value = pose.dissolve; u.uGrey.value = pose.grey; u.uBreath.value = pose.still ? 0 : 1;
-      c.inner.position.y = pose.lift;
+      // lift is away from the glass: up in Wonderland, down beneath it
+      c.inner.position.y = pose.lift * (c.face ? -1 : 1);
       c.rig.rotation.set(-pose.fall * 1.45, pose.yaw + pose.spin, 0); c.rig.position.set(0, pose.fall * .16, pose.fall * .3);
       if (c.stand) c.stand.position.y = c.h / 2 - .03 + Math.sin(t * 1.6 + u.uPhase.value) * .018;
       c.shade.scale.setScalar(.95 * (1 - Math.min(.5, pose.lift * .5)) * (1 - pose.dissolve));
