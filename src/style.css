@@ -51,16 +51,7 @@ body.mirror #flip { background: var(--paper); color: var(--ink); border-color: v
 body.mirror #cutin { background: #0a0508; border-color: var(--blood); }
 #cutin.show { animation: cutin .75s cubic-bezier(.1,.9,.2,1) forwards; }
 @keyframes cutin { 0% { opacity: 1; clip-path: inset(0 0 0 100%); } 18%, 78% { opacity: 1; clip-path: inset(0 0 0 0); } 100% { opacity: 1; clip-path: inset(0 100% 0 0); } }
-#dialog { position: fixed; inset: 0; display: none; align-items: flex-end; justify-content: center; z-index: 6; background: linear-gradient(transparent 35%, rgba(10,3,6,.86)); cursor: pointer; }
-#dialog.show { display: flex; }
-#dialog img { position: absolute; bottom: 0; left: clamp(-30px, 6vw, 140px); height: min(78vh, 120vw); filter: drop-shadow(0 0 40px rgba(0,0,0,.6)); animation: rise .35s cubic-bezier(.2,.9,.2,1); pointer-events: none; }
-#dialog[data-who=b] img, #dialog[data-who=shadow] img { left: auto; right: clamp(-30px, 6vw, 140px); transform: rotate(180deg); bottom: auto; top: 0; }
 @keyframes rise { from { translate: 0 40px; opacity: 0; } }
-#dialog > div { position: relative; width: min(880px, 94vw); margin-bottom: max(26px, env(safe-area-inset-bottom)); padding: 30px clamp(18px, 3vw, 38px) 34px; background: rgba(255,245,247,.95); color: var(--ink); border-top: 6px solid var(--blood); box-shadow: 12px 12px 0 var(--ink); }
-#dialog[data-who=b] > div, #dialog[data-who=shadow] > div, #dialog[data-who=queen] > div { background: rgba(14,4,8,.95); color: #ffe9ee; box-shadow: 12px 12px 0 var(--blood); }
-#dialog b { position: absolute; top: -22px; left: 22px; padding: 4px 16px; background: var(--blood); color: #fff; font-weight: 900; font-size: clamp(15px, 1.6vw, 21px); letter-spacing: .3em; transform: skewX(-12deg); }
-#dialog p { font-weight: 500; font-size: clamp(16px, 1.75vw, 23px); line-height: 1.8; letter-spacing: .04em; min-height: 3.6em; }
-#dialog div i { position: absolute; right: 16px; bottom: 8px; font-size: 11px; letter-spacing: .3em; opacity: .55; animation: blink 1s infinite; }
 @keyframes blink { 50% { opacity: .15; } }
 #title { position: fixed; inset: 0; z-index: 9; background: #0a0508; color: #fff; overflow: hidden; transition: opacity .9s, visibility .9s, transform .9s; }
 #title.gone { opacity: 0; visibility: hidden; pointer-events: none; transform: scale(1.25); }
@@ -96,7 +87,6 @@ body.mirror #cutin { background: #0a0508; border-color: var(--blood); }
   .tools { position: fixed; right: max(14px, env(safe-area-inset-right)); top: calc(max(14px, env(safe-area-inset-top)) + clamp(72px, 17vw, 130px)); }
   #flip { bottom: max(14px, env(safe-area-inset-bottom)); padding: 6px clamp(28px, 9vw, 90px); }
   #flip b { font-size: clamp(26px, 6.4vw, 44px); }
-  #dialog img { height: 62vh; left: -8vw; } #dialog[data-who=b] img, #dialog[data-who=shadow] img { right: -8vw; }
   #title .art { background-position: 78% 50%; } #title .en { display: none; }
 }
 /* Landscape phone: there is no height to spare, so the HUD moves into the two side columns and the flip sits under the right thumb. */
@@ -111,14 +101,6 @@ body.mirror #cutin { background: #0a0508; border-color: var(--blood); }
   #flip:active { transform: skewX(-12deg) translate(4px, 4px); }
   #flip b { font-size: 26px; }
   /* the board fills the middle, so a line is spoken from the column beside it (--gap, measured in main.js) and no row is covered */
-  #dialog { background: none; justify-content: flex-start; padding-inline: max(14px, env(safe-area-inset-left)) max(14px, env(safe-area-inset-right)); }
-  #dialog[data-who=b], #dialog[data-who=shadow] { justify-content: flex-end; }
-  #dialog > div { width: clamp(150px, calc(var(--gap, 28vw) - 24px), 320px); padding: 16px 14px 26px; margin-bottom: max(10px, env(safe-area-inset-bottom)); border-top-width: 4px; box-shadow: 6px 6px 0 var(--ink); }
-  #dialog[data-who=b] > div, #dialog[data-who=shadow] > div, #dialog[data-who=queen] > div { box-shadow: 6px 6px 0 var(--blood); }
-  #dialog p { font-size: 14px; line-height: 1.55; min-height: 3.1em; }
-  #dialog[data-who=n] { justify-content: center; align-items: center; } #dialog[data-who=n] > div { width: min(880px, 72vw); }   /* narration darkens the whole screen: it keeps the middle */
-  #dialog b { top: -16px; left: 10px; font-size: 13px; padding: 2px 12px; } #dialog div i { right: 10px; bottom: 6px; font-size: 10px; }
-  #dialog img { left: 0; height: 84vh; max-width: var(--gap, 28vw); object-fit: contain; object-position: center bottom; } #dialog[data-who=b] img, #dialog[data-who=shadow] img { right: 0; }
   #banner::before { height: 20vh; } #banner b { font-size: 11vh; }
   #title h1 { font-size: clamp(48px, 19vh, 130px); top: 7vh; } #title .tag { bottom: 31vh; font-size: 13px; line-height: 1.7; } #begin { bottom: 13vh; font-size: 20px; padding: 9px 42px; } #title small { bottom: 10px; }
 }

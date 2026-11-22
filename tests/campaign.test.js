@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { compile, movesX, playX, solveX, shownAims, strike, bellIn } from '../src/modifiers.js';
 import { LEVELS, CHAPTERS } from '../src/levels.js';
 import { STORY, AFTER, ENDING, PAGES, COACH, NAMES, ART, GLYPH, DEATH } from '../src/story.js';
+import { sprite } from '../src/cast.js';
+import { existsSync } from 'node:fs';
 import { botRate } from '../tools/gen.js';
 
 const P = (name) => name.charCodeAt(0) - 97 + (8 - +name[1]) * 6;
@@ -17,6 +19,12 @@ test('every board, chapter and speaker has its text', () => {
   assert.equal(PAGES.length, CHAPTERS.length);
   const lines = [...Object.values(STORY), ...Object.values(AFTER), ...Object.values(ENDING)].flat();
   for (const [who] of lines) { assert.ok(who in NAMES, 'name ' + who); assert.ok(ART[who] || who in GLYPH, 'face ' + who); }
+  for (const [who, , mood] of lines) {
+    if (who in GLYPH) continue;
+    const src = sprite(who, mood); assert.ok(src && existsSync(new URL('../public/' + src.slice(2), import.meta.url)), 'sprite ' + who + ' ' + mood);
+    if (mood) assert.ok(src.endsWith(`_${mood}.webp`), 'mood ' + who + ' ' + mood);
+  }
+  for (let c = 0; c < CHAPTERS.length; c++) for (const d of ['bg', 'page']) assert.ok(existsSync(new URL(`../public/art/${d}/${c}.webp`, import.meta.url)), d + c);
   for (const k of 'srQhnbS') assert.equal(DEATH[k].length, 2);
 });
 test('the first square is won with one body; from the second square on the mirror is required', () => {

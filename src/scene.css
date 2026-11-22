@@ -1,0 +1,131 @@
+/* 对白演出。结构见 scene.js。 */
+#dialog { position: fixed; inset: 0; z-index: 6; display: none; overflow: hidden; background: #0a0508; cursor: pointer; user-select: none; -webkit-user-select: none; --sh: min(96vh, 150vw); }
+#dialog.show { display: block; animation: sc-in .5s ease both; }
+#dialog.out { animation: sc-out .42s ease both; pointer-events: none; }
+@keyframes sc-in { from { opacity: 0; } } @keyframes sc-out { to { opacity: 0; } }
+
+/* 背景：章节的画，镜中人说话时右半边裂成镜渊 */
+#dialog .bg, #dialog .bg i { position: absolute; inset: 0; }
+#dialog .bg i { background: center / cover no-repeat; }
+#dialog .bg .day { inset: -4%; animation: sc-drift 38s ease-in-out infinite alternate; filter: saturate(.92) brightness(.82); }
+#dialog .bg .abyss { inset: -4%; clip-path: polygon(100% 0, 100% 0, 100% 100%, 100% 100%); transition: clip-path .7s cubic-bezier(.7,0,.2,1); animation: sc-drift 38s ease-in-out infinite alternate-reverse; filter: brightness(.8); }
+#dialog.split .bg .abyss { clip-path: polygon(62% 0, 100% 0, 100% 100%, 46% 100%); }
+#dialog .bg .crack { left: 46%; width: 16%; right: auto; background: linear-gradient(to bottom right, transparent calc(50% - 2px), #fff calc(50% - 1px), #fff calc(50% + 1px), transparent calc(50% + 2px)); transform: scaleX(-1); opacity: 0; transition: opacity .3s .5s; filter: drop-shadow(0 0 10px #ff2d55); }
+#dialog.split .bg .crack { opacity: .9; }
+#dialog .bg::after { content: ''; position: absolute; inset: 0; background: radial-gradient(120% 90% at 50% 38%, transparent 40%, rgba(10,3,6,.72)), linear-gradient(transparent 52%, rgba(10,3,6,.9)); }
+@keyframes sc-drift { from { transform: scale(1.02) translate(-1%, 0); } to { transform: scale(1.1) translate(1.4%, -1.2%); } }
+#dialog.tale .bg .day, #dialog.page .bg .day { filter: saturate(.7) brightness(.5) blur(3px); transition: filter .6s; }
+#dialog .bg .day { transition: filter .6s; }
+
+#dialog .petals { position: absolute; inset: 0; pointer-events: none; }
+#dialog .petals s { position: absolute; top: -6%; width: 12px; height: 9px; border-radius: 80% 0 80% 0; background: #ff5c7a; opacity: .75; animation: sc-fall 9s linear infinite; }
+#dialog .petals s:nth-child(3n) { background: #fff; opacity: .5; width: 8px; height: 6px; }
+#dialog .petals s:nth-child(1) { left: 6%; animation-duration: 11s; } #dialog .petals s:nth-child(2) { left: 14%; animation-delay: -3s; } #dialog .petals s:nth-child(3) { left: 23%; animation-delay: -6s; animation-duration: 13s; }
+#dialog .petals s:nth-child(4) { left: 31%; animation-delay: -1s; } #dialog .petals s:nth-child(5) { left: 38%; animation-delay: -7s; animation-duration: 12s; } #dialog .petals s:nth-child(6) { left: 47%; animation-delay: -4s; }
+#dialog .petals s:nth-child(7) { left: 55%; animation-delay: -8s; animation-duration: 10s; } #dialog .petals s:nth-child(8) { left: 63%; animation-delay: -2s; } #dialog .petals s:nth-child(9) { left: 70%; animation-delay: -5s; animation-duration: 14s; }
+#dialog .petals s:nth-child(10) { left: 78%; animation-delay: -9s; } #dialog .petals s:nth-child(11) { left: 85%; animation-delay: -3.5s; animation-duration: 12s; } #dialog .petals s:nth-child(12) { left: 92%; animation-delay: -6.5s; }
+#dialog .petals s:nth-child(13) { left: 98%; animation-delay: -1.5s; animation-duration: 15s; } #dialog .petals s:nth-child(14) { left: 50%; animation-delay: -10s; animation-duration: 16s; }
+@keyframes sc-fall { to { transform: translate(-22vw, 112vh) rotate(540deg); } }
+
+/* 立绘：爱丽丝在左，对面的人在右；说话的那位亮着、靠前 */
+#dialog .cast img { position: absolute; bottom: calc(var(--sh) * -.1); height: var(--sh); width: auto; pointer-events: none; opacity: 0; transform-origin: 50% 100%; transition: filter .35s, transform .35s cubic-bezier(.2,.9,.2,1), opacity .35s; filter: brightness(.42) saturate(.7); will-change: transform; }
+#dialog .cast img[src] { opacity: 1; }
+#dialog .cast .l { left: 50%; --x: calc(-50% - min(27vw, var(--sh) * .46)); transform: translateX(var(--x)) scale(.94); }
+#dialog .cast .r { left: 50%; --x: calc(-50% + min(27vw, var(--sh) * .46)); transform: translateX(var(--x)) scale(.94); }
+#dialog .cast img.on { filter: drop-shadow(0 0 28px rgba(255,92,122,.28)); transform: translateX(var(--x)) scale(1); z-index: 1; }
+#dialog .cast img.in { animation: sc-enter-r .55s cubic-bezier(.16,.9,.2,1) both; }
+#dialog .cast .l.in { animation-name: sc-enter-l; }
+#dialog .cast img.jolt { animation: sc-jolt .42s cubic-bezier(.3,.7,.3,1) both; }
+@keyframes sc-enter-l { from { opacity: 0; translate: -9vw 0; filter: brightness(2) blur(6px); } to { translate: 0 0; } }
+@keyframes sc-enter-r { from { opacity: 0; translate: 9vw 0; filter: brightness(2) blur(6px); } to { translate: 0 0; } }
+@keyframes sc-jolt { 0% { translate: 0 0; } 18% { translate: 0 -3.2%; } 36% { translate: -1% 0; } 54% { translate: 1% 0; } 72% { translate: -.5% 0; } 100% { translate: 0 0; } }
+#dialog.tale .cast img, #dialog.tale .cast img.on { opacity: 0; transform: translateX(var(--x)) scale(.94); }
+#dialog[data-who=b2] .cast .r { filter: brightness(.3) saturate(.2); }
+#dialog.page .cast { display: none; }
+
+/* 场景名、按钮 */
+#dialog > header { position: absolute; left: 0; top: max(18px, env(safe-area-inset-top)); padding: 8px 26px 8px max(22px, env(safe-area-inset-left)); background: var(--ink, #14060b); color: #fff; clip-path: polygon(0 0, 100% 0, calc(100% - 18px) 100%, 0 100%); display: flex; align-items: baseline; gap: 14px; animation: sc-tag .6s cubic-bezier(.2,.9,.2,1) both; }
+#dialog > header b { font-weight: 900; font-size: clamp(14px, 1.5vw, 20px); letter-spacing: .3em; }
+#dialog > header i { font-style: normal; font-weight: 700; font-size: clamp(8px, .8vw, 11px); letter-spacing: .34em; color: #ff5c7a; padding-right: 12px; }
+@keyframes sc-tag { from { transform: translateX(-100%); } }
+#dialog nav { position: absolute; right: max(14px, env(safe-area-inset-right)); top: max(16px, env(safe-area-inset-top)); display: flex; gap: 8px; z-index: 3; }
+#dialog nav button, #dialog .log button { font: inherit; font-weight: 900; font-size: 13px; letter-spacing: .28em; padding: 9px 12px 9px 16px; min-height: 40px; color: #fff; background: rgba(20,6,11,.72); border: 1px solid rgba(255,255,255,.35); transform: skewX(-12deg); cursor: pointer; backdrop-filter: blur(6px); }
+#dialog nav button:hover, #dialog .log button:hover { background: var(--blood, #c8102e); border-color: var(--blood, #c8102e); }
+#dialog nav button.active { background: #fff; color: var(--ink, #14060b); }
+
+/* 对白框 */
+#dialog .box { position: absolute; left: 50%; bottom: max(26px, env(safe-area-inset-bottom)); width: min(980px, 92vw); transform: translateX(-50%); padding: 34px clamp(20px, 3.4vw, 46px) 30px; background: linear-gradient(100deg, rgba(255,246,248,.97) 70%, rgba(255,226,233,.94)); color: var(--ink, #14060b); border-top: 5px solid var(--blood, #c8102e); box-shadow: 10px 10px 0 rgba(20,6,11,.92); z-index: 2; transition: background .3s, color .3s; }
+#dialog .box::before { content: ''; position: absolute; right: 18px; top: 10px; width: 54px; height: 54px; background: currentColor; opacity: .06; clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
+#dialog .box b { position: absolute; left: clamp(14px, 2.4vw, 34px); top: 0; transform: translateY(-58%) skewX(-12deg); padding: 5px 22px 5px 18px; background: var(--blood, #c8102e); color: #fff; font-weight: 900; font-size: clamp(15px, 1.5vw, 21px); letter-spacing: .32em; box-shadow: 5px 5px 0 var(--ink, #14060b); white-space: nowrap; }
+#dialog .box b:empty { display: none; }
+#dialog .box p { font-weight: 500; font-size: clamp(16px, 1.7vw, 23px); line-height: 1.85; letter-spacing: .05em; min-height: 3.7em; }
+#dialog .box p span { opacity: 0; animation: sc-type .01s linear forwards; }
+#dialog .box p.all span { animation: none; opacity: 1; }
+@keyframes sc-type { to { opacity: 1; } }
+#dialog .box > i { position: absolute; right: 18px; bottom: 9px; font-style: normal; font-size: 13px; color: var(--blood, #c8102e); animation: sc-bob 1s ease-in-out infinite; }
+@keyframes sc-bob { 50% { transform: translateY(4px); } }
+/* 玻璃下面的人说话：框翻成黑的 */
+#dialog[data-who=b] .box, #dialog[data-who=b2] .box, #dialog[data-who=shadow] .box, #dialog[data-who=hollow] .box, #dialog[data-who=queen] .box { background: linear-gradient(100deg, rgba(16,4,9,.96) 70%, rgba(60,6,20,.94)); color: #ffe9ee; box-shadow: 10px 10px 0 var(--blood, #c8102e); border-top-color: #fff; }
+#dialog[data-who=b] .box b, #dialog[data-who=b2] .box b, #dialog[data-who=shadow] .box b, #dialog[data-who=hollow] .box b, #dialog[data-who=queen] .box b { background: #fff; color: var(--ink, #14060b); box-shadow: 5px 5px 0 var(--blood, #c8102e); }
+#dialog[data-who=b] .box b, #dialog[data-who=b2] .box b, #dialog[data-who=shadow] .box b, #dialog[data-who=hollow] .box b, #dialog[data-who=queen] .box b, #dialog[data-who=cat] .box b, #dialog[data-who=rook] .box b, #dialog[data-who=soldier] .box b, #dialog[data-who=wk] .box b, #dialog[data-who=cinder] .box b, #dialog[data-who=match] .box b, #dialog[data-who=egg] .box b { left: auto; right: clamp(14px, 2.4vw, 34px); }
+#dialog[data-who=b2] .box p { opacity: .4; }
+
+/* 旁白：没有框，字浮在画上 */
+#dialog.tale .box { background: none; box-shadow: none; border: 0; color: #fff; text-align: center; bottom: 50%; transform: translate(-50%, 50%); width: min(900px, 86vw); }
+#dialog.tale .box::before { display: none; }
+#dialog.tale .box::after { content: ''; position: absolute; left: 50%; top: 0; width: 64px; height: 2px; margin-left: -32px; background: var(--blood, #c8102e); box-shadow: 0 0 12px #ff2d55; }
+#dialog.tale .box p { font-weight: 700; font-size: clamp(18px, 2.1vw, 29px); line-height: 2.1; letter-spacing: .16em; text-shadow: 0 2px 18px #000, 0 0 2px #000; }
+#dialog.tale .box > i { right: 50%; bottom: -8px; color: #fff; }
+
+/* 残页：整页插画 + 一段字 */
+#dialog .plate { display: none; }
+#dialog.page .plate { display: block; position: absolute; left: 50%; top: 50%; height: min(84vh, 118vw); aspect-ratio: 2 / 3; transform: translate(calc(-50% - min(21vw, 280px)), -50%) rotate(-3deg); box-shadow: 0 30px 80px #000, 14px 14px 0 var(--blood, #c8102e); animation: sc-plate .9s cubic-bezier(.16,.9,.2,1) both; }
+#dialog.page .plate img { width: 100%; height: 100%; object-fit: cover; display: block; }
+@keyframes sc-plate { from { opacity: 0; transform: translate(calc(-50% - min(21vw, 280px)), -40%) rotate(-9deg) scale(.92); } }
+#dialog.page .box { left: auto; right: max(5vw, calc(50% - 520px)); bottom: 50%; transform: translateY(50%); width: min(400px, 36vw); text-align: left; }
+#dialog.page .box::after { left: 0; margin-left: clamp(20px, 3.4vw, 46px); }
+#dialog.page .box p { font-size: clamp(18px, 1.9vw, 26px); line-height: 2.2; }
+#dialog.page .box > i { right: 18px; }
+
+/* 对白记录 */
+#dialog .log { position: absolute; inset: 0; z-index: 4; display: none; flex-direction: column; background: rgba(10,3,6,.93); color: #ffe9ee; cursor: default; backdrop-filter: blur(8px); padding: max(18px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left)); }
+#dialog.logging .log { display: flex; animation: sc-in .25s ease both; }
+#dialog .log header { display: flex; justify-content: space-between; align-items: center; width: min(820px, 100%); margin: 0 auto 14px; padding-bottom: 12px; border-bottom: 2px solid var(--blood, #c8102e); }
+#dialog .log h3 { font-weight: 900; font-size: clamp(20px, 2.4vw, 30px); letter-spacing: .3em; }
+#dialog .log ol { list-style: none; margin: 0 auto; padding: 0 6px 30px 0; width: min(820px, 100%); overflow-y: auto; touch-action: pan-y; flex: 1; overscroll-behavior: contain; }
+#dialog .log li { display: grid; grid-template-columns: 9.5em 1fr; gap: 16px; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,.1); }
+#dialog .log li b { color: #ff5c7a; font-weight: 900; letter-spacing: .14em; text-align: right; font-size: 14px; line-height: 1.9; }
+#dialog .log li p { font-size: clamp(14px, 1.3vw, 17px); line-height: 1.9; letter-spacing: .04em; }
+
+/* 竖屏手机：两位都在，各让出半个身子 */
+@media (orientation: portrait) {
+  #dialog { --sh: min(74vh, 168vw); }
+  #dialog .cast img { bottom: calc(var(--sh) * .12); }
+  #dialog .cast .l { --x: calc(-50% - 27vw); } #dialog .cast .r { --x: calc(-50% + 27vw); }
+  #dialog .cast .l.on { --x: calc(-50% - 13vw); } #dialog .cast .r.on { --x: calc(-50% + 13vw); }
+  #dialog.split .bg .abyss { clip-path: polygon(70% 0, 100% 0, 100% 100%, 38% 100%); }
+  #dialog .bg .crack { left: 38%; width: 32%; }
+  #dialog > header { top: calc(max(14px, env(safe-area-inset-top)) + 50px); flex-direction: column; gap: 2px; padding-block: 7px; }
+  #dialog nav { top: max(12px, env(safe-area-inset-top)); left: 12px; right: 12px; justify-content: flex-end; }
+  #dialog .box { width: 94vw; bottom: max(18px, env(safe-area-inset-bottom)); padding: 28px 18px 30px; box-shadow: 7px 7px 0 rgba(20,6,11,.92); }
+  #dialog .box p { font-size: clamp(16px, 4.3vw, 20px); line-height: 1.8; min-height: 5.4em; }
+  #dialog .box b { font-size: 15px; }
+  #dialog.tale .box { width: 86vw; } #dialog.tale .box p { font-size: clamp(18px, 5vw, 24px); line-height: 2.1; }
+  #dialog.page .plate { height: min(50vh, 118vw); top: calc(max(12px, env(safe-area-inset-top)) + 122px); transform: translate(-50%, 0) rotate(-2deg); box-shadow: 0 20px 50px #000, 9px 9px 0 var(--blood, #c8102e); animation-name: sc-plate-p; }
+  @keyframes sc-plate-p { from { opacity: 0; transform: translate(-50%, 8%) rotate(-8deg) scale(.92); } }
+  #dialog.page .box { left: 50%; right: auto; width: 86vw; top: auto; bottom: max(26px, env(safe-area-inset-bottom)); transform: translateX(-50%); }
+  #dialog.page .box p { font-size: clamp(17px, 4.6vw, 22px); line-height: 2; min-height: 6em; }
+  #dialog .log li { grid-template-columns: 1fr; gap: 0; } #dialog .log li b { text-align: left; }
+}
+/* 横屏手机：矮 */
+@media (orientation: landscape) and (max-height: 540px) {
+  #dialog { --sh: 118vh; }
+  #dialog .cast img { bottom: calc(var(--sh) * -.22); }
+  #dialog .box { width: min(640px, 62vw); padding: 20px 20px 18px; bottom: max(10px, env(safe-area-inset-bottom)); box-shadow: 6px 6px 0 rgba(20,6,11,.92); }
+  #dialog .box p { font-size: 14px; line-height: 1.6; min-height: 3.2em; }
+  #dialog .box b { font-size: 13px; padding: 3px 14px; }
+  #dialog nav button { font-size: 11px; min-height: 34px; padding: 6px 9px 6px 12px; }
+  #dialog.tale .box p { font-size: 17px; line-height: 1.9; }
+  #dialog.page .plate { height: 88vh; } #dialog.page .box { width: 40vw; } #dialog.page .box p { font-size: 16px; line-height: 1.9; }
+}
+@media (prefers-reduced-motion: reduce) { #dialog .bg i, #dialog .petals s { animation: none; } #dialog .petals { display: none; } }

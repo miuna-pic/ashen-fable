@@ -8,6 +8,7 @@ import { audio } from './audio.js';
 import { enemyAt, MAX_INK, W, H } from './rules.js';
 import { compile, movesX, playX, solveX, shownAims, strike, bellIn, causeOf } from './modifiers.js';
 import { LEVELS, CHAPTERS } from './levels.js';
+import { createScene } from './scene.js';
 import { STORY, AFTER, ENDING, PAGES, DEATH, COACH, NAMES, ART, GLYPH, RULES } from './story.js';
 
 const app = document.querySelector('#app');
@@ -25,7 +26,7 @@ app.innerHTML = `
 </footer>
 <div id="banner"><b></b><i></i></div>
 <div id="cutin"><img alt=""><b></b></div>
-<div id="dialog"><img alt=""><em></em><div><b></b><p></p><i>轻触继续 ▶</i></div></div>
+<div id="dialog"></div>
 <section id="map"><header><h2>棋谱</h2><p id="tally"></p><button id="closemap">返回棋盘</button></header><div id="squares"></div></section>
 <section id="title"><div class="art" style="background-image:url(./art/key.webp)"></div><div class="veil"></div>
   <h1><span>镜渊</span><span>爱丽丝</span></h1><p class="en">ALICE<br>IN THE<br>MIRROR ABYSS</p>
@@ -33,6 +34,7 @@ app.innerHTML = `
   <button id="begin">坠 入</button><small>黑暗童话棋 · 八格战役</small></section>`;
 const $ = (s) => document.querySelector(s);
 const stage = createStage($('#stage'));
+const scene = createScene($('#dialog'));
 const save = { deaths: 0, done: {}, endings: {}, ...JSON.parse(localStorage.getItem('mirror-alice') || '{}') };
 const persist = () => {
   // 别的标签页可能存过更新的进度：合并后再写。
@@ -91,18 +93,12 @@ function toast(text) { const t = $('#toast'); t.textContent = text; t.classList.
 function cutin(f) { const c = $('#cutin'); c.querySelector('img').src = `./art/${f ? 'alice_b' : 'alice_a'}.webp`; c.querySelector('b').textContent = f ? '镜 噬' : '吃 子'; c.classList.remove('show'); void c.offsetWidth; c.classList.add('show'); layout(); }
 // 剧情里的 {n} 是这一个爱丽丝的编号，和左上角的计数一致。
 const han = (n) => [...String(n)].map((c, i, a) => (c === '0' ? (a.slice(i).some((x) => x !== '0') && a[i - 1] !== '0' ? '零' : '') : '一二三四五六七八九'[c - 1] + ['', '十', '百', '千', '万'][a.length - 1 - i])).join('');
-function talk(lines) {
+// 对白演出见 scene.js。ch 选背景和左上角的场景名；page 是残页序号。
+function talk(lines, ch = LEVELS[index]?.ch ?? 0, page = null) {
   if (!lines?.length) return Promise.resolve();
-  lines = lines.map(([w, t]) => [w, t.replace(/\{n\}/g, han(1865 + save.deaths))]);
   say();
-  return new Promise((done) => {
-    const d = $('#dialog'); let i = -1;
-    const next = () => { if (++i >= lines.length) { d.classList.remove('show'); d.onclick = null; return done(); }
-      const [who, text] = lines[i], img = d.querySelector('img'); d.dataset.who = who; d.classList.toggle('plain', !ART[who]);
-      if (ART[who]) img.src = `./art/${ART[who]}.webp`; d.querySelector('em').textContent = GLYPH[who] || '';
-      d.querySelector('b').textContent = NAMES[who]; d.querySelector('b').style.display = NAMES[who] ? '' : 'none'; d.querySelector('p').textContent = text; };
-    d.classList.add('show'); d.onclick = next; next();
-  });
+  const c = CHAPTERS[ch];
+  return scene.play(lines.map(([w, t, m]) => [w, t.replace(/\{n\}/g, han(1865 + save.deaths)), m]), { ch, page, title: page == null ? `${c.no} · ${c.title}` : `残页 ${'一二三四五六七八'[page]}`, sub: c.sub });
 }
 async function enter(i, story = true) {
   locked = true; playing = true; index = i; hint = null; moves = 0; const level = LEVELS[i];
@@ -156,12 +152,12 @@ async function won() {
   if (index + 1 === LEVELS.length) {
     save.endings[st.ending] = true; persist();
     await banner(st.ending === 'exit' ? '破 镜' : '将 死', st.ending === 'exit' ? 'THROUGH THE LOOKING-GLASS' : 'CHECKMATE', 1800);
-    await talk(ENDING[st.ending]); await talk([['n', PAGES[level.ch]]]);
+    await talk(ENDING[st.ending]); await talk([['n', PAGES[level.ch]]], level.ch, level.ch);
     await banner(st.ending === 'exit' ? '完' : '升 变', st.ending === 'exit' ? `真结局 · 没有第 ${1866 + save.deaths} 个` : '结局一 · 女王万岁——再坠一次，试试不戴王冠', 2400);
     $('#begin').textContent = '再 坠 一 次'; return showMap();
   }
   await banner(level.exam ? '及 格' : '升 变', moves <= level.par ? `${moves} 步 · 最短走法` : `${moves} 步 · 最短 ${level.par} 步`, 1300);
-  if (last) { await talk(AFTER[level.ch]); await banner('残页 ' + '一二三四五六七八'[level.ch], '收进了棋谱', 1100); await talk([['n', PAGES[level.ch]]]); }
+  if (last) { await talk(AFTER[level.ch]); await banner('残页 ' + '一二三四五六七八'[level.ch], '收进了棋谱', 1100); await talk([['n', PAGES[level.ch]]], level.ch, level.ch); }
   return enter(index + 1);
 }
 
@@ -278,6 +274,11 @@ $('#hint').onclick = async () => {
 };
 $('#begin').onclick = async () => {
   audio.start(); const q = new URLSearchParams(location.search), n = q.get('level');
+  // ?story=fall / after3 / page3 / crown / exit 直接看一场对白（看演出用）
+  const k = q.get('story'), lv = LEVELS.find((l) => l.id === k), c = +k?.slice(-1);
+  if (k) { $('#title').classList.add('gone');
+    await (lv ? talk(STORY[k], lv.ch) : ENDING[k] ? talk(ENDING[k], 7) : k.startsWith('after') ? talk(AFTER[c], c) : talk([['n', PAGES[c]]], c, c));
+    return showMap(); }
   if (n !== null && LEVELS[n | 0]) { $('#title').classList.add('gone'); return enter(n | 0); }
   if (Object.keys(save.done).length) return showMap();
   $('#title').classList.add('gone'); await enter(0);
