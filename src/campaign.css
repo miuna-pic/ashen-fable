@@ -23,7 +23,7 @@ body.dark #stage { filter: brightness(.55) saturate(.7); transition: filter .5s;
 #dialog[data-who=n] > div { background: none; box-shadow: none; border: 0; color: #ffe9ee; text-align: center; margin-bottom: 38vh; }
 #dialog[data-who=n] p { font-size: clamp(18px, 2.1vw, 28px); letter-spacing: .14em; }
 #dialog[data-who=b2] p { opacity: .4; }
-#map { position: fixed; inset: 0; z-index: 8; background: #0a0508; color: #ffe9ee; overflow-y: auto; touch-action: pan-y; display: none; padding: clamp(16px, 3vw, 44px); background-image: linear-gradient(rgba(10,5,8,.9), rgba(10,5,8,.97)), url(./art/key.webp); background-size: cover; background-position: 70% 30%; }
+#map { position: fixed; inset: 0; z-index: 8; background: #0a0508; color: #ffe9ee; overflow-y: auto; touch-action: pan-y; display: none; padding: clamp(16px, 3vw, 44px); background-image: linear-gradient(rgba(10,5,8,.9), rgba(10,5,8,.97)), url(/art/key.webp); background-size: cover; background-position: 70% 30%; }
 #map.show { display: block; animation: rise .4s; }
 #map > header { display: flex; align-items: flex-end; gap: 20px; flex-wrap: wrap; border-bottom: 4px solid var(--blood); padding-bottom: 12px; margin-bottom: 20px; }
 #map h2 { font-weight: 900; font-size: clamp(44px, 8vw, 110px); line-height: .9; letter-spacing: -.04em; transform: scaleY(1.15); transform-origin: bottom; text-shadow: 5px 5px 0 var(--blood); }
