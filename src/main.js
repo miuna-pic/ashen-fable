@@ -193,7 +193,10 @@ stage.addEventListener('pointerdown', (e) => { down = { x: e.clientX, y: e.clien
 stage.addEventListener('pointerup', (e) => {
   if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 14 || busy || state.result) return;
   const { tile, unit } = view.pick(e.clientX, e.clientY);
-  if (selected && tile != null) {
+  // 点到立牌身体时，射线落地的格子在她身后：那不是玩家想点的格子
+  const body = unit ? R.piece(state, unit) : null;
+  const behindStandee = body && body.at !== tile;
+  if (selected && tile != null && !behindStandee) {
     const a = R.actionsFor(state, selected).find((x) => x.to === tile);
     if (a) return act(a);
   }
