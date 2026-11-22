@@ -3,8 +3,8 @@
 // Stems and one-shots are rendered offline from sampled instruments by tools/audio (see tools/audio/README.md).
 const BASE = (import.meta.env?.BASE_URL ?? './') + 'audio/';
 const SFX = ['step', 'slide', 'tick', 'flip', 'kill', 'death', 'win', 'ui', 'dialog', 'banner', 'warn'];
-const CUE_OF = { 'rabbit-hole': 'rabbit', tea: 'tea', croquet: 'croquet', trial: 'trial' };
-const ROTATION = ['rabbit', 'tea', 'croquet'];
+// One theme per chapter, in campaign order: 兔子洞, 疯茶会, 槌球场, 灰姑娘, 卖火柴的小女孩, 蛋头先生, 白骑士, 审判.
+export const CHAPTER_CUES = ['rabbit', 'tea', 'croquet', 'ball', 'match', 'wall', 'wood', 'trial'];
 // One-shots are rendered level with the score (tools/audio/sfx.py sets each one's loudness), so both buses share a gain.
 const VOL = { music: .8, sfx: .8 };
 const store = typeof localStorage === 'undefined' ? null : localStorage;
@@ -16,7 +16,7 @@ const shots = {};
 /** Which cue a level plays: its own, the boss cue for a boss level, otherwise a rotation of the three field cues. */
 export function cueFor(level, index = 0) {
   if (!level) return 'title';
-  return CUE_OF[level.id] || (level.boss ? 'trial' : ROTATION[index % ROTATION.length]);
+  return level.boss ? 'trial' : CHAPTER_CUES[index % CHAPTER_CUES.length];
 }
 /** The pitch (midi) a footstep rings: the n-th tone of the chord the score is on, climbing. Mirror steps descend an octave lower. */
 export function stepNote(pcs, n, face) {
@@ -72,7 +72,7 @@ async function playCue(name) {
 function clock() {
   if (!cue) return null;
   const m = cue.meta, beat = 60 / m.bpm, pos = ((ctx.currentTime - cue.at) % m.len + m.len) % m.len, grid = beat / 4;
-  return { bar: Math.floor(pos / (beat * 3)) % m.chords[0].length, wait: (grid - (pos % grid)) % grid };
+  return { bar: Math.floor(pos / (beat * (m.beats || 3))) % m.chords[0].length, wait: (grid - (pos % grid)) % grid };
 }
 function shot(name, { rate = 1, gain = 1, when = 0, pan = 0 } = {}) {
   const buf = shots[name]; if (!buf) return;
