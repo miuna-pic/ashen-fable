@@ -79,9 +79,9 @@ export function play(st0, face, to) {
     if (face === 0) st.ink = Math.min(MAX_INK, st.ink + 1);
     if (KINDS[e.kind].boss) { st.result = 'win'; ev.push({ t: 'win' }); return { st, ev }; }
   }
-  if (!st.boss && to === st.goal) { st.result = 'win'; ev.push({ t: 'win' }); return { st, ev }; }
   const killer = before.find((a) => st.enemies[a.id].alive && a.squares.includes(to));
   if (killer) { st.result = 'dead'; ev.push({ t: 'strike', id: killer.id, at: to }); return { st, ev }; }
+  if (!st.boss && to === st.goal) { st.result = 'win'; ev.push({ t: 'win' }); return { st, ev }; }
   for (const e of st.enemies) {
     const k = KINDS[e.kind]; if (!e.alive || !k.mover) continue;
     let best = null;
