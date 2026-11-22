@@ -90,6 +90,8 @@ const FRAG = /* glsl */`
 
 const gltf = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
 const cache = new Map();
+// ?flat=all or ?flat=cat,queen keeps the named figures as their illustrations, to compare the two side by side.
+const FLAT = new Set((new URLSearchParams(globalThis.location?.search || '').get('flat') || '').split(','));
 const fetchModel = (name) => {
   if (!cache.has(name)) cache.set(name, gltf.loadAsync(`./models/${name}.glb`).then((g) => {
     let mesh = null; g.scene.traverse((o) => { if (o.isMesh && !mesh) mesh = o; });
@@ -125,6 +127,7 @@ export function createCharacters({ world, shadow, placeholder }) {
     const c = { g, inner, rig, stand, shade, u, pose, face, name, h: cast.h, model: null, lag: new T.Vector3(), vel: new T.Vector3(), last: null, gone: false, near: true };
     g.userData = { inner, h: cast.h, pose, face, char: c };
     live.add(c);
+    if (FLAT.has(name) || FLAT.has('all')) return g;
     fetchModel(name).then(({ geometry, map }) => {
       if (c.gone) return;
       u.map.value = map;
