@@ -47,7 +47,8 @@ body.dark #stage { filter: brightness(.55) saturate(.7); transition: filter .5s;
 #squares button:not(:disabled):not(.done) { box-shadow: 4px 4px 0 var(--blood); animation: pulse 1.8s infinite; }
 #squares blockquote { margin-top: 14px; padding-left: 12px; border-left: 3px solid var(--blood); font-size: 13px; line-height: 1.8; letter-spacing: .08em; opacity: .85; }
 @media (max-aspect-ratio: 4/5) {
-  #chips { top: auto; bottom: calc(max(16px, env(safe-area-inset-bottom)) + 120px); }
+  #chips { top: auto; bottom: calc(max(16px, env(safe-area-inset-bottom)) + 166px); }
   #coach { top: clamp(118px, 19vh, 170px); padding: 12px 14px 10px; }
   .tools { flex-wrap: wrap; justify-content: flex-end; max-width: 44vw; }
+  #flip { bottom: calc(max(16px, env(safe-area-inset-bottom)) + 96px); }
 }

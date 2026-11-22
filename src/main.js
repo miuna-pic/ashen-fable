@@ -89,8 +89,11 @@ function hud() {
 function banner(big, small, ms = 1500) { const b = $('#banner'); b.querySelector('b').textContent = big; b.querySelector('i').textContent = small; b.classList.remove('show'); void b.offsetWidth; b.classList.add('show'); return wait(ms); }
 function toast(text) { const t = $('#toast'); t.textContent = text; t.classList.remove('show'); void t.offsetWidth; t.classList.add('show'); }
 function cutin(f) { const c = $('#cutin'); c.querySelector('img').src = `./art/${f ? 'alice_b' : 'alice_a'}.webp`; c.querySelector('b').textContent = f ? '镜 噬' : '吃 子'; c.classList.remove('show'); void c.offsetWidth; c.classList.add('show'); }
+// 剧情里的 {n} 是这一个爱丽丝的编号，和左上角的计数一致。
+const han = (n) => [...String(n)].map((c, i, a) => (c === '0' ? (a.slice(i).some((x) => x !== '0') && a[i - 1] !== '0' ? '零' : '') : '一二三四五六七八九'[c - 1] + ['', '十', '百', '千', '万'][a.length - 1 - i])).join('');
 function talk(lines) {
   if (!lines?.length) return Promise.resolve();
+  lines = lines.map(([w, t]) => [w, t.replace(/\{n\}/g, han(1865 + save.deaths))]);
   say();
   return new Promise((done) => {
     const d = $('#dialog'); let i = -1;
@@ -153,7 +156,7 @@ async function won() {
     save.endings[st.ending] = true; persist();
     await banner(st.ending === 'exit' ? '破 镜' : '将 死', st.ending === 'exit' ? 'THROUGH THE LOOKING-GLASS' : 'CHECKMATE', 1800);
     await talk(ENDING[st.ending]); await talk([['n', PAGES[level.ch]]]);
-    await banner(st.ending === 'exit' ? '完' : '升 变', st.ending === 'exit' ? '真结局 · 没有第 1867 个' : '结局一 · 女王万岁——再坠一次，试试不戴王冠', 2400);
+    await banner(st.ending === 'exit' ? '完' : '升 变', st.ending === 'exit' ? `真结局 · 没有第 ${1866 + save.deaths} 个` : '结局一 · 女王万岁——再坠一次，试试不戴王冠', 2400);
     $('#begin').textContent = '再 坠 一 次'; return showMap();
   }
   await banner(level.exam ? '及 格' : '升 变', moves <= level.par ? `${moves} 步 · 最短走法` : `${moves} 步 · 最短 ${level.par} 步`, 1300);
