@@ -34,7 +34,13 @@ app.innerHTML = `
 const $ = (s) => document.querySelector(s);
 const stage = createStage($('#stage'));
 const save = { deaths: 0, done: {}, endings: {}, ...JSON.parse(localStorage.getItem('mirror-alice') || '{}') };
-const persist = () => localStorage.setItem('mirror-alice', JSON.stringify(save));
+const persist = () => {
+  // 别的标签页可能存过更新的进度：合并后再写。
+  const old = JSON.parse(localStorage.getItem('mirror-alice') || '{}');
+  for (const [k, v] of Object.entries(old.done || {})) save.done[k] = Math.min(v, save.done[k] ?? v);
+  Object.assign(save.endings, old.endings); save.deaths = Math.max(save.deaths, old.deaths || 0);
+  localStorage.setItem('mirror-alice', JSON.stringify(save));
+};
 let index = 0, face = 0, st = null, hint = null, locked = true, step = -1, moves = 0, playing = false;
 const graves = LEVELS.map(() => []);
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -123,7 +129,7 @@ async function move(to) {
   const level = LEVELS[index];
   if (st.result === 'dead') {
     const cause = causeOf(st0, st, r.ev), late = cause?.kind === 'timeout';
-    save.deaths++; persist(); if (!late && !graves[index].includes(to)) graves[index].push(to);
+    save.deaths++; persist(); if (!late && !level.exam && !graves[index].includes(to)) graves[index].push(to);
     await banner(late ? '不及格' : '斩 首', late ? '步数用完了' : `第 ${1864 + save.deaths} 个爱丽丝留在了这一格`, 1600);
     const taught = c?.die; if (step >= 0) step = taught ? step + 1 : COACH[level.id].length - 1;
     await enter(index, false);
@@ -181,13 +187,13 @@ $('#stage').addEventListener('pointerup', (e) => {
 $('#flip').onclick = flip;
 addEventListener('keydown', (e) => { if (e.code === 'Space') { e.preventDefault(); flip(); } });
 $('#retry').onclick = () => { if (!locked) { const keep = step; enter(index, false).then(() => { if (keep >= 0) { step = COACH[LEVELS[index].id].length - 1; coach(); } }); } };
-$('#clean').onclick = () => { if (!locked) { graves[index] = []; enter(index, false); toast('遗骸被清走了'); } };
+$('#clean').onclick = () => { if (!locked) { graves[index] = []; const keep = step; enter(index, false).then(() => { if (keep >= 0) { step = COACH[LEVELS[index].id].length - 1; coach(); } }); toast('遗骸被清走了'); } };
 $('#mute').onclick = () => { $('#mute').classList.toggle('off', audio.toggle()); };
-$('#hint').onclick = () => {
+$('#hint').onclick = async () => {
   if (locked) return;
   if (LEVELS[index].exam) return toast('柴郡猫：口试不许问兔子。');
   if (coachStep()) return toast('白兔：先听她把话说完。');
-  const path = solveX(st, { cap: 25000 });
+  toast('白兔在算……'); locked = true; await wait(40); const path = solveX(st); locked = false;
   if (!path) return toast(graves[index].length || !LEVELS[index].need ? '白兔：这一局已经走死了，重来吧。' : '白兔：活着是过不去的。……你明白我的意思。');
   if (path[0].face !== face) { toast('白兔：先翻面。'); $('#flip').classList.remove('nudge'); void $('#flip').offsetWidth; $('#flip').classList.add('nudge'); return; }
   hint = path[0].to; toast(`白兔：最快还要 ${path.length} 步。`); hud();
