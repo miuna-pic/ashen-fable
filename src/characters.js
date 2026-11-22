@@ -16,15 +16,14 @@ const WORLD = [
   { rim: '#ff2a4d', rimPow: .6, ash: '#ff3b2f' },
 ];
 
-const VERT = /* glsl */`
+const POSE = /* glsl */`
   uniform sampler2D relief; uniform float uTime, uPhase, uSquash, uTwist, uBreath, uDepth, uAspect;
   uniform vec3 uLag; uniform vec2 uLean;
-  varying vec2 vUv; varying vec3 vV, vP; varying mat3 vNM;
-  void main() {
-    vUv = uv; vec4 r = texture2D(relief, uv);
+  vec3 posed(out vec3 rest) {
+    vec4 r = texture2D(relief, uv);
     float y = uv.y, w = r.g * smoothstep(0., .08, y);
     vec3 p = vec3((uv.x - .5) * uAspect, y, (r.r - .5) * uDepth);
-    vP = p; vNM = normalMatrix;
+    rest = p;
     // breathing and a slow weight shift
     float chest = smoothstep(.25, .6, y) * (1. - smoothstep(.6, .8, y));
     p.x *= 1. + chest * .02 * sin(uTime * 1.9 + uPhase) * uBreath;
@@ -38,9 +37,20 @@ const VERT = /* glsl */`
     float a = uTwist * y, c = cos(a), s = sin(a); p.xz = mat2(c, -s, s, c) * p.xz;
     p.xz += uLean * y * y;
     p.y *= 1. - uSquash; p.xz *= 1. + uSquash * .55 * (1. - y * .5);
+    return p;
+  }`;
+const VERT = /* glsl */`${POSE}
+  varying vec2 vUv; varying vec3 vV, vP; varying mat3 vNM;
+  void main() {
+    vUv = uv; vNM = normalMatrix; vec3 p = posed(vP);
     vec4 mv = modelViewMatrix * vec4(p, 1.); vV = normalize(-mv.xyz);
     gl_Position = projectionMatrix * mv;
   }`;
+// The same acting for a figure seen through the glass, feeding the board's see-through material.
+const VERT_FAR = /* glsl */`${POSE}
+  varying vec3 wp, wn; varying vec2 vuv;
+  void main() { vuv = uv; vec3 rest; vec4 p = modelMatrix * vec4(posed(rest), 1.); wp = p.xyz; wn = normalize(mat3(modelMatrix) * vec3(0., 0., 1.)); gl_Position = projectionMatrix * viewMatrix * p; }`;
+
 const FRAG = /* glsl */`
   uniform sampler2D map, relief; uniform vec3 uRim, uTint, uAsh; uniform float uRimPow, uFlash, uDissolve, uGrey, uDepth, uAspect; uniform vec2 uTexel;
   varying vec2 vUv; varying vec3 vV, vP; varying mat3 vNM;
@@ -118,8 +128,8 @@ export function createCharacters({ world, shadow, placeholder, through }) {
   // Figures of the far world are drawn over the glass with its see-through material; their ground shadow is hidden.
   function setNear(g, near) {
     const c = g.userData.char, body = c.stand || c.body; c.near = near; c.shade.visible = near;
-    if (!near && !c.far) { c.far = through(body.material.map || c.u.map.value); c.far.uniforms.tint.value.copy(c.u.uTint.value); }
-    body.material = near ? c.here : c.far; if (c.body) body.scale.x = near ? 1 : CAST[c.name].aspect; body.renderOrder = near ? 0 : -2.5;
+    if (!near && !c.far) { c.far = through(body.material.map || c.u.map.value); c.far.uniforms.tint.value.copy(c.u.uTint.value); if (c.body) { Object.assign(c.far.uniforms, c.u); c.far.vertexShader = VERT_FAR; } }
+    body.material = near ? c.here : c.far; body.renderOrder = near ? 0 : -2.5;
   }
   function remove(g) { const c = g.userData.char; if (!c) return; c.gone = true; live.delete(c); world.remove(g); c.g.traverse((o) => { if (o.material) o.material.dispose(); }); c.here.dispose(); c.far?.dispose(); }
 
