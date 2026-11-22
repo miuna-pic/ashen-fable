@@ -50,3 +50,8 @@ body.dark #stage { filter: brightness(.55) saturate(.7); transition: filter .5s;
   #chips { top: auto; bottom: calc(max(16px, env(safe-area-inset-bottom)) + 96px); }
   #coach { top: clamp(118px, 19vh, 170px); padding: 12px 14px 10px; }
 }
+/* A narrow window that is not a portrait phone: the bottom row cannot hold the ink, the flip and five tools, so the tools go up under the counter and the flip keeps the row. */
+@media (max-width: 760px) and (min-aspect-ratio: 4/5) and (min-height: 541px), (max-width: 760px) and (min-aspect-ratio: 4/5) and (orientation: portrait) {
+  .tools { position: fixed; right: max(14px, env(safe-area-inset-right)); top: calc(max(14px, env(safe-area-inset-top)) + clamp(66px, 21vw, 130px)); }
+  .ink { max-width: 25vw; } .ink small { display: none; }
+}
