@@ -291,39 +291,51 @@ export function createScenery(world) {
   const embers = new T.Points(eg, new T.PointsMaterial({ color: '#ff3a2a', size: .09, map: blob, transparent: true, depthWrite: false, blending: T.AdditiveBlending, toneMapped: false })); embers.frustumCulled = false; world.add(embers);
 
   // Middle distance: chess pieces the size of towers, standing in the sea between the board and the painted horizon,
-  // so the horizon slides behind them when the camera moves. Each is a lathe profile [height, half-width] drawn flat.
+  // so the horizon slides behind them when the camera moves. Each is a lathe profile [height, half-width], turned and lit.
   const PROFILES = [
     [[0, .30], [.05, .30], [.08, .22], [.2, .15], [.52, .11], [.56, .19], [.6, .12], [.66, .17], [.78, .19], [.9, .12], [.95, .04], [1, .05]],                      // bishop
     [[0, .34], [.06, .34], [.09, .25], [.18, .2], [.7, .17], [.73, .26], [.78, .26], [.8, .3], [1, .3]],                                                             // rook
     [[0, .30], [.05, .30], [.09, .2], [.24, .14], [.6, .09], [.64, .2], [.68, .11], [.74, .16], [.86, .26], [.9, .12], [.93, .05], [1, .04]],                        // queen
     [[0, .32], [.07, .32], [.11, .2], [.3, .13], [.5, .1], [.54, .2], [.58, .1], [.66, .2], [.8, .22], [.92, .16], [1, 0]],                                          // pawn
   ];
-  const tower = (profile, dark) => {
-    const c = document.createElement('canvas'); c.width = 256; c.height = 512; const g = c.getContext('2d'), X0 = 128, Y0 = 512;
-    g.beginPath(); profile.forEach(([y, w], i) => g[i ? 'lineTo' : 'moveTo'](X0 + w * 340, Y0 - y * 500)); [...profile].reverse().forEach(([y, w]) => g.lineTo(X0 - w * 340, Y0 - y * 500)); g.closePath();
-    const body = g.createLinearGradient(20, 0, 236, 0);
-    if (dark) { body.addColorStop(.2, '#7a0f1f'); body.addColorStop(.42, '#1a050c'); body.addColorStop(.6, '#240710'); body.addColorStop(.8, '#e02038'); }
-    else { body.addColorStop(.2, '#fffaf7'); body.addColorStop(.5, '#d6bfee'); body.addColorStop(.8, '#5d5fc0'); }
-    g.fillStyle = body; g.fill(); g.save(); g.clip(); g.lineWidth = 6; g.strokeStyle = dark ? '#ff2a40' : '#4a41a8'; g.stroke();
-    g.fillStyle = dark ? '#ff2a40' : '#d9a441';   // lit windows up the shaft
-    for (let i = 0; i < 5; i++) g.fillRect(X0 - 4 + (i % 2 ? 11 : -11), Y0 - 130 - i * 40, 8, 18);
-    g.globalAlpha = .28; g.fillStyle = dark ? '#000' : '#3a3594'; for (let y = 60; y < 500; y += 46) g.fillRect(0, Y0 - y, 256, 5);   // courses of stone
-    g.globalAlpha = 1;
-    g.globalCompositeOperation = 'destination-out'; const fade = g.createLinearGradient(0, Y0, 0, Y0 - 70); fade.addColorStop(0, '#000'); fade.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = fade; g.fillRect(0, Y0 - 70, 256, 70);   // the foot is lost in sea mist
-    g.restore();
-    if (dark) { g.globalCompositeOperation = 'destination-out'; g.beginPath(); g.moveTo(60, 0); g.lineTo(190, 0); g.lineTo(160, 44); g.lineTo(136, 24); g.lineTo(108, 58); g.closePath(); g.fill(); }   // the mirror's towers are broken off
-    const t = new T.CanvasTexture(c); t.colorSpace = T.SRGBColorSpace; t.anisotropy = 4; return t;
-  };
-  const haze0 = (r) => (r - 13) / 9 * 1.3;   // farther ones are taller, so they read at the same size and differ only in drift
-  const towerGeo = new T.PlaneGeometry(1, 1).translate(0, .5, 0);
+  const TOWER = /* glsl */`varying vec3 wp, wn; uniform vec3 base; uniform float tall, seed, haze;
+    void main(){
+      vec3 lp = inv * wp, n = normalize(inv * wn), v = normalize(lp - inv * cameraPosition);
+      float m = step(lp.y, 0.), hy = abs(lp.y) / tall, ang = atan(lp.x - base.x, lp.z - base.z);
+      bool back = dot(n, v) > 0.; if (back) n = -n;
+      // the mirror's towers are snapped off, each at its own height, along a slanted splintered line
+      float snap = .7 + seed * .24 + sin(ang + seed * 9.) * .07 + abs(fract(ang * 1.6 + seed * 5.) - .5) * .1;
+      if (m > .5 && hy > snap) discard;
+      vec3 L = normalize(vec3(-.55, mix(.5, -.5, m), .65));
+      float d = dot(n, L), key = clamp(d, 0., 1.), wrap = d * .5 + .5, fr = pow(1. - clamp(dot(-v, n), 0., 1.), 2.5);
+      float course = smoothstep(.44, .5, abs(fract(hy * 16. + seed) - .5));                                   // courses of stone
+      vec2 w = vec2(ang * 1.5915 + floor(hy * 9.) * .37 + seed * 3., hy * 9.), wf = abs(fract(w) - .5);
+      float lit = step(wf.x, .11) * step(wf.y, .27) * step(.5, hash(floor(w) + seed * 17.)) * step(.16, hy) * step(hy, .68);
+      // surface: sunlit porcelain with lilac shade and gilt courses
+      vec3 a = mix(vec3(.40, .38, .78), vec3(1., .96, .94), smoothstep(.15, .8, wrap)) + vec3(1., .9, .8) * pow(key, 12.) * .25;
+      a = mix(a, vec3(.95, .72, .36) * (.5 + .7 * key), course * .7) + vec3(.75, .8, 1.) * fr * .35;
+      a = mix(a, vec3(1., .78, .4) * 1.15, lit * .9);
+      // mirror: charred stone, a hard crimson rim, embers in the joints and the windows
+      vec3 b = mix(vec3(.022, .006, .012), vec3(.34, .03, .07), key * key) + vec3(1., .10, .16) * fr * .8;
+      float crack = smoothstep(.06, .0, abs(noise(vec2(ang * 3. + seed * 7., hy * 11.)) - .5)) * step(.2, hy);
+      b += vec3(1., .16, .1) * (course * .35 + crack * .5 * (.6 + .4 * sin(time * 1.1 + seed * 20. + hy * 9.)));
+      b = mix(b, vec3(1., .2, .22) * 1.5, lit);
+      b = mix(b, vec3(1., .35, .25) * 1.4, smoothstep(snap - .02, snap, hy));                                 // the break still glows
+      if (back) b = vec3(.5, .03, .05) * (1. - hy * .6);                                                      // looking into the hollow
+      vec3 col = mix(a, b, m);
+      col = mix(col, mix(vec3(.80, .74, .97), vec3(.30, .02, .06), m), haze * .55);                           // far ones sink into their sky
+      gl_FragColor = vec4(col, smoothstep(.0, .14, hy));                                                      // the foot is lost in sea mist
+    }`;
+  const lathes = PROFILES.map((p) => new T.LatheGeometry(p.map(([y, w]) => new T.Vector2(Math.max(w * .66, .001), y)), 20));
   const towers = [1, -1].map((side) => {
-    const g = new T.Group(), maps = PROFILES.map((p) => tower(p, side < 0));
+    const g = new T.Group();
     for (let i = 0; i < 9; i++) {
-      const az = (i - 4) * .25 + (hash1(i + 40) - .5) * .1, r = 13 + hash1(i + 50) * 9, h = 1.9 + hash1(i + 60) * 1.3 + haze0(r) * 1.1;
+      const az = (i - 4) * .25 + (hash1(i + 40) - .5) * .1, r = 13 + hash1(i + 50) * 9, haze = (r - 13) / 9;
+      const h = 1.9 + hash1(i + 60) * 1.3 + haze * 1.43, girth = .85 + hash1(i + 70 + side) * .4;   // farther ones are taller, so they read at the same size and differ only in drift
       if (i === 4) continue;   // leave the castle a clear view down the middle
-      const haze = (r - 13) / 9;   // far ones sink into the sky's colour
-      const m = new T.Mesh(towerGeo, new T.MeshBasicMaterial({ map: maps[i % maps.length], transparent: true, depthWrite: false, toneMapped: false, side: T.DoubleSide, opacity: 1 - haze * .3, color: side > 0 ? new T.Color(1, 1 - haze * .06, 1) : new T.Color(1 + haze, .6 + haze * .4, .6 + haze * .4) }));
-      m.position.set(Math.sin(az) * r, 0, -Math.cos(az) * r); m.scale.set(h * .5, h * side, 1); m.rotation.y = -az; m.renderOrder = -8 + haze * -1; g.add(m);
+      const m = new T.Mesh(lathes[(i + (side < 0 ? 2 : 0)) % lathes.length], shader(TOWER, { base: { value: new T.Vector3() }, tall: { value: h }, seed: { value: hash1(i * 3 + side + 80) }, haze: { value: haze } }, { transparent: true, side: side < 0 ? T.DoubleSide : T.FrontSide }));
+      m.position.set(Math.sin(az) * r, 0, -Math.cos(az) * r); m.material.uniforms.base.value.copy(m.position);
+      m.scale.set(h * girth, h * side, h * girth); m.rotation.y = hash1(i + 90) * 6.28; m.renderOrder = -8 - haze; g.add(m);
     }
     world.add(g); return g;
   });
