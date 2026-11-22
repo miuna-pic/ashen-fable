@@ -198,13 +198,15 @@ export function createStage(canvas) {
     for (const tw of [...tweens]) { const k = Math.min(1, (now - tw.t0) / tw.ms); tw.fn(tw.curve(k)); if (k >= 1) { tweens.delete(tw); tw.done(); } }
     const c = portrait ? TALL : CAM, d = (camera.userData.base || 13) + (camera.userData.dolly || 0);
     lean.x += (lean.tx - lean.x) * Math.min(1, dt * 3); lean.y += (lean.ty - lean.y) * Math.min(1, dt * 3);
-    pose(c, d, Math.sin(t * .13) * .5 + lean.x * 1.4); camera.position.y -= lean.y * .5; camera.lookAt(0, c.ly - lift, c.lz);
+    // a tall window has no room at the sides to lean into
+    pose(c, d, portrait ? Math.sin(t * .13) * .3 : Math.sin(t * .13) * .5 + lean.x * 1.4); camera.position.y -= lean.y * .5; camera.lookAt(0, c.ly - lift, c.lz);
     scenery.update(t, dt); vfx.update(dt, canvas.clientHeight);
     const pulse = .5 + .5 * Math.sin(t * 4);
     tiles.forEach((pair) => pair.forEach((f) => { if (f.goal.visible) f.goal.material.opacity = .6 + .4 * pulse; }));
     for (const g of pieces.values()) g.userData.body.position.y = g.userData.h / 2 - .03 + Math.sin(t * 1.6 + g.position.x * 2 + g.position.z) * .018;
     final.uniforms.time.value = t; final.uniforms.punch.value = fx.punch; final.uniforms.hurt.value = fx.hurt; final.uniforms.flash.value = fx.flash;
-    final.uniforms.dark.value += ((flipped ? 1 : 0) - final.uniforms.dark.value) * .08; bloom.strength = .14 + final.uniforms.dark.value * .3; bloom.threshold = .9 - final.uniforms.dark.value * .25;
+    // the grade follows the glass as it turns, at any frame rate
+    final.uniforms.dark.value = (1 - Math.cos(world.rotation.z)) / 2; bloom.strength = .14 + final.uniforms.dark.value * .3; bloom.threshold = .9 - final.uniforms.dark.value * .25;
     composer.render(); requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
