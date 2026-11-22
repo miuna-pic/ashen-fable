@@ -96,7 +96,7 @@ export function createStage(canvas) {
     marks.forEach((m, side) => { m.visible = side === face; });
   }
   let alice = null, corpses = [], flipped = 0, state = null, busy = 0;
-  const clear = () => { for (const g of [...pieces.values(), ...corpses, ...(alice || [])]) world.remove(g); pieces.clear(); corpses = []; alice = null; };
+  const clear = () => { for (const g of [...pieces.values(), ...corpses, ...(alice || [])]) { world.remove(g); g.userData.here.dispose(); g.userData.far.dispose(); } pieces.clear(); corpses = []; alice = null; };
   function load(st) {
     clear(); state = st;
     alice = [standee('alice_a', 0), standee('alice_b', 1)]; alice.forEach((g) => g.position.copy(local(st.alice)));
