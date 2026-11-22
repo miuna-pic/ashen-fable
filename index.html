@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#0a0508">
+  <title>子夜十二响 — 格林黑童话棋</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%230a0508'/><circle cx='16' cy='16' r='11' fill='none' stroke='%23ff2848' stroke-width='3'/><path d='M16 8v8l5 3' stroke='%23f3ead9' stroke-width='3' fill='none'/></svg>">
+  <link rel="preload" href="./noto-serif-sc.woff2" as="font" type="font/woff2" crossorigin>
+</head>
+<body>
+  <div id="bg" aria-hidden="true"><span class="tale">从前从前有一个女孩</span><span class="tale two">钟响之后再没有童话</span></div>
+  <canvas id="gl" aria-label="棋盘"></canvas>
+  <div class="grain" aria-hidden="true"></div>
+
+  <header class="brand">
+    <b>子夜十二响</b>
+    <i>GRIMM · THE TWELFTH TOLL</i>
+  </header>
+
+  <div class="turn" id="turn"></div>
+
+  <section class="clock" aria-live="polite">
+    <svg viewBox="-60 -60 120 120" id="dial"></svg>
+    <div class="clock-text">
+      <b id="phase">白昼</b>
+      <span id="toll"></span>
+      <span class="bells" id="bells"></span>
+    </div>
+  </section>
+
+  <aside class="card" id="card"></aside>
+  <p class="log" id="log" aria-live="polite"></p>
+
+  <nav class="tools">
+    <button id="btn-rules">规则 · 图鉴</button>
+    <button id="btn-mode">对手：书灵</button>
+    <button id="btn-sound">声音：开</button>
+    <button id="btn-restart">重开</button>
+  </nav>
+
+  <div id="bell" aria-hidden="true"><div class="slash"></div><b></b><span></span></div>
+
+  <section id="title">
+    <img class="t-day" src="./art/hood_day.webp" alt="">
+    <img class="t-night" src="./art/hood_night.webp" alt="">
+    <div class="t-copy">
+      <i>GRIMM · THE TWELFTH TOLL</i>
+      <h1><span>子夜</span><span>十二响</span></h1>
+      <p>钟响之前，她们还是童话。<br>钟响之后，她们终于变回自己。</p>
+      <button id="btn-start">翻开第一页</button>
+      <small>二次元黑童话 · 时钟棋 · 浏览器即玩</small>
+    </div>
+  </section>
+
+  <dialog id="rules">
+    <form method="dialog"><button class="close" aria-label="关闭">×</button></form>
+    <h2>规则</h2>
+    <ol class="rule-list">
+      <li><b>步数即时间。</b>你每走一格，钟就走一个时辰（日字跳算两个）。走得远，天黑得快。</li>
+      <li><b>十二时辰一响。</b>钟一响，昼夜倒转，所有角色当场翻面——换一副面孔，换一种走法。</li>
+      <li><b>钟响时，站在中央「终」格的女主角写下结局，她的一方获胜。</b>第一响只是序章，不写结局。</li>
+      <li><b>封印。</b>玻璃棺里的白雪、荆棘里的睡美人不能动，也吃不掉，只能被人撞开一格。</li>
+      <li>吃光对方三位女主角同样获胜。第六响时书页燃尽，女主角多的一方胜。纸偶不能写结局。</li>
+    </ol>
+    <h2>图鉴</h2>
+    <div class="roster" id="roster"></div>
+  </dialog>
+
+  <section id="ending" hidden>
+    <img id="end-art" alt="">
+    <div class="e-copy">
+      <i id="end-tag"></i>
+      <h2 id="end-title"></h2>
+      <p id="end-line"></p>
+      <button id="btn-again">再翻一遍</button>
+    </div>
+  </section>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
