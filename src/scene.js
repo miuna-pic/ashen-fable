@@ -196,7 +196,19 @@ export function createScene(canvas) {
 
   // —— 棋子 ——
   const units = new Map();
+  const portraits = new Map(); // 每个角色的立绘只加载一次，棋子重建时复用
+  const SHARED = new Set();
+  function dropUnit(u) {
+    stage.remove(u.g);
+    u.g.traverse((o) => {
+      if (!o.isMesh) return;
+      if (!SHARED.has(o.geometry)) o.geometry.dispose();
+      if (!SHARED.has(o.material)) o.material.dispose();
+    });
+    units.delete(u.id);
+  }
   const shardGeo = new THREE.OctahedronGeometry(0.36, 0);
+  for (const shared of [markGeo, spikeGeo, spikeMat, shardGeo]) SHARED.add(shared);
   function makeUnit(p) {
     const g = new THREE.Group();
     g.position.copy(tilePos(p.at));
@@ -215,7 +227,9 @@ export function createScene(canvas) {
       u.body = new THREE.Mesh(geo, mat); u.mat = mat;
       u.pivot = new THREE.Group(); u.pivot.rotation.x = -0.5; u.pivot.add(u.body);
       u.body.scale.set(h * 0.66, h, 1);
-      loader.load(`./art/${p.kind}.webp`, (t) => { t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; mat.map = t; mat.visible = true; mat.needsUpdate = true; u.body.scale.set(h * t.image.width / t.image.height, h, 1); });
+      const show = (t) => { mat.map = t; mat.visible = true; mat.needsUpdate = true; u.body.scale.set(h * t.image.width / t.image.height, h, 1); };
+      if (portraits.has(p.kind)) show(portraits.get(p.kind));
+      else loader.load(`./art/${p.kind}.webp`, (t) => { t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; portraits.set(p.kind, t); show(t); });
       const base = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.3, 0.05, 24), new THREE.MeshStandardMaterial({ color: p.kind === 'queen' ? '#9fdcff' : '#e9e2d2', metalness: 0.1, roughness: 0.6, emissive: p.kind === 'queen' ? '#1a6aa8' : '#000' }));
       base.position.y = 0.03;
       g.add(base, u.pivot);
@@ -307,7 +321,7 @@ export function createScene(canvas) {
   }
   function sync(s) {
     setBoard(s);
-    for (const [id, u] of units) if (!s.pieces.some((p) => p.id === id)) { stage.remove(u.g); units.delete(id); }
+    for (const [id, u] of units) if (!s.pieces.some((p) => p.id === id)) dropUnit(u);
     for (const p of s.pieces) { const u = units.get(p.id) ?? makeUnit(p); u.g.position.copy(tilePos(p.at)); u.g.scale.setScalar(1); u.g.visible = true; }
   }
   function setMarks({ actions = [], selected = null, threat = [], frost = [], path = [] } = {}) {
@@ -347,7 +361,7 @@ export function createScene(canvas) {
     const u = units.get(id); if (!u) return;
     burst(u.g.position, color, 70, 1.3);
     await tween(260, (k) => u.g.scale.setScalar(1 - ease(k) * 0.999));
-    stage.remove(u.g); units.delete(id);
+    dropUnit(u);
   }
   async function spawnUnit(p) {
     const u = makeUnit(p);
