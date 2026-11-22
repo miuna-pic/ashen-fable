@@ -172,11 +172,19 @@ export function createStage(canvas) {
   const composer = new EffectComposer(renderer); composer.addPass(new RenderPass(scene, camera));
   const bloom = new UnrealBloomPass(new T.Vector2(256, 256), .2, .6, .9); composer.addPass(bloom);
   const final = new ShaderPass(FINAL); composer.addPass(final); composer.addPass(new OutputPass());
-  let portrait = false;
+  let portrait = false, lift = 0; const edge = new T.Vector3();
+  const pose = (c, d, sway) => { camera.position.set(sway, Math.sin(c.pitch) * d, Math.cos(c.pitch) * d + c.back); camera.lookAt(0, c.ly - lift, c.lz); };
   function resize() {
     const w = canvas.clientWidth, h = canvas.clientHeight; if (!w || !h) return;
     renderer.setSize(w, h, false); composer.setSize(w, h); camera.aspect = w / h; portrait = w / h < .8; const c = portrait ? TALL : CAM;
-    camera.fov = c.fov; camera.userData.base = Math.max(c.dist, c.wide / (w / h)); camera.updateProjectionMatrix();
+    camera.fov = c.fov; camera.updateProjectionMatrix();
+    // tilt down, then pull back, until the near edge of the board clears whatever HUD sits at the bottom centre (the flip button)
+    const hud = document.getElementById('flip')?.getBoundingClientRect(), limit = (hud && hud.height ? hud.top : h) - 6;
+    let d = Math.max(c.dist, c.wide / (w / h));
+    const clear = () => { pose(c, d, 0); camera.updateMatrixWorld(); return (1 - edge.set(0, 0, H / 2).project(camera).y) / 2 * h <= limit; };
+    for (lift = 0; lift < 3 && !clear(); lift += .25);
+    for (; d < 40 && !clear(); d += .25);
+    camera.userData.base = d;
   }
   addEventListener('resize', resize); resize();
   if (import.meta.env.DEV) window.__cam = CAM;
@@ -185,7 +193,7 @@ export function createStage(canvas) {
     const dt = Math.min(.05, (now - last) / 1000); last = now; const t = now / 1000;
     for (const tw of [...tweens]) { const k = Math.min(1, (now - tw.t0) / tw.ms); tw.fn(tw.curve(k)); if (k >= 1) { tweens.delete(tw); tw.done(); } }
     const c = portrait ? TALL : CAM, d = (camera.userData.base || 13) + (camera.userData.dolly || 0);
-    camera.position.set(Math.sin(t * .13) * .3, Math.sin(c.pitch) * d, Math.cos(c.pitch) * d + c.back); camera.lookAt(0, c.ly, c.lz);
+    pose(c, d, Math.sin(t * .13) * .3);
     scenery.update(t, dt); vfx.update(dt, canvas.clientHeight);
     const pulse = .5 + .5 * Math.sin(t * 4);
     tiles.forEach((pair) => pair.forEach((f) => { if (f.goal.visible) f.goal.material.opacity = .6 + .4 * pulse; }));
