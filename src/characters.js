@@ -107,7 +107,7 @@ const fetchModel = (name) => {
 };
 export const preload = (names) => Promise.all(names.map((n) => fetchModel(n).catch(() => null)));
 
-export function createCharacters({ world, shadow, placeholder }) {
+export function createCharacters({ world, shadow, placeholder, through }) {
   const live = new Set();
   const tmp = new T.Vector3(), prev = new T.Vector3(), quat = new T.Quaternion();
 
@@ -124,7 +124,7 @@ export function createCharacters({ world, shadow, placeholder }) {
     };
     // `pose` is what the stage animates; `update` turns it into bones-free acting every frame.
     const pose = { lift: 0, squash: 0, twist: 0, lean: new T.Vector2(), yaw: 0, fall: 0, flash: 0, dissolve: 0, grey: 0, still: false, spin: 0 };
-    const c = { g, inner, rig, stand, shade, u, pose, face, name, h: cast.h, model: null, lag: new T.Vector3(), vel: new T.Vector3(), last: null, gone: false, near: true };
+    const c = { g, inner, rig, stand, shade, here: stand.material, far: null, body: null, ink: null, u, pose, face, name, h: cast.h, model: null, lag: new T.Vector3(), vel: new T.Vector3(), last: null, gone: false, near: true };
     g.userData = { inner, h: cast.h, pose, face, char: c };
     live.add(c);
     if (FLAT.has(name) || FLAT.has('all')) return g;
@@ -135,14 +135,19 @@ export function createCharacters({ world, shadow, placeholder }) {
       const ink = new T.Mesh(geometry, new T.ShaderMaterial({ uniforms: u, vertexShader: VERT, fragmentShader: FRAG, side: T.BackSide, defines: { INK: 1 } }));
       body.frustumCulled = ink.frustumCulled = false; ink.userData.ink = true;
       const model = new T.Group(); model.add(body, ink); model.scale.setScalar(cast.h);
-      rig.remove(stand); stand.material.dispose(); rig.add(model); c.model = model; c.stand = null; setNear(g, c.near);
+      rig.remove(stand); c.here.dispose(); c.far?.dispose(); rig.add(model); Object.assign(c, { model, stand: null, body, ink, here: body.material, far: null }); setNear(g, c.near);
     }).catch(() => {});
     return g;
   }
 
-  // Figures of the far world draw before the glass so it tints them; their ground shadow is hidden.
-  function setNear(g, near) { const c = g.userData.char; c.near = near; c.shade.visible = near; c.rig.traverse((o) => { if (o.isMesh) o.renderOrder = (near ? 0 : -4) - (o.userData.ink ? 1 : 0); }); }
-  function remove(g) { const c = g.userData.char; if (!c) return; c.gone = true; live.delete(c); world.remove(g); c.g.traverse((o) => { if (o.material) o.material.dispose(); }); }
+  // Figures of the far world are drawn over the glass with its see-through material; their ground shadow is hidden.
+  function setNear(g, near) {
+    const c = g.userData.char, body = c.stand || c.body; c.near = near; c.shade.visible = near;
+    if (!near && !c.far) { c.far = through(body.material.map || c.u.map.value); c.far.uniforms.tint.value.copy(c.u.uTint.value); if (c.body) { c.far.side = T.FrontSide; c.far.depthWrite = true; } }
+    body.material = near ? c.here : c.far; body.renderOrder = near ? 0 : -2.5;
+    if (c.ink) c.ink.visible = near;
+  }
+  function remove(g) { const c = g.userData.char; if (!c) return; c.gone = true; live.delete(c); world.remove(g); c.g.traverse((o) => { if (o.material) o.material.dispose(); }); c.here.dispose(); c.far?.dispose(); }
 
   // Springs give every figure follow-through: the body arrives first, the hair and skirt catch up.
   function update(t, dt) {

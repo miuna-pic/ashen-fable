@@ -85,9 +85,10 @@ export function createStage(canvas) {
   const chars = createCharacters({
     world,
     shadow: (face) => lay(flat(GLYPH.blob, face ? '#ff1d3a' : '#27304d', face ? .5 : .45), 0, .95),
+    through: scenery.through,
     placeholder: (name, h, aspect) => { textures[name] ||= tex(name); const m = new T.Mesh(plane, new T.MeshBasicMaterial({ map: textures[name], transparent: true, alphaTest: .35, side: T.DoubleSide, toneMapped: false })); m.scale.set(h * aspect, h, 1); m.position.y = h / 2 - .03; m.rotation.x = -.16; return m; },
   });
-  // Whoever hangs in the far world is drawn before the glass, so the board tints them like a reflection.
+  // Whoever hangs in the far world is drawn over the glass with the see-through material.
   function order(face) {
     for (const g of [...pieces.values(), ...corpses, ...(alice || [])]) chars.setNear(g, g.userData.face === face);
     marks.forEach((m, side) => { m.visible = side === face; });
