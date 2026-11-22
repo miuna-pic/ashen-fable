@@ -113,7 +113,7 @@ footer { position: absolute; left: 50%; bottom: calc(18px + var(--safe-b)); tran
 .trio i { display: block; height: 120px; margin: 0 -12px 10px; background-size: 150% auto; background-position: 50% 9%; mask-image: linear-gradient(180deg, #000 60%, transparent); -webkit-mask-image: linear-gradient(180deg, #000 60%, transparent); }
 .trio h4 { font-size: 16px; letter-spacing: .1em; margin-bottom: 6px; }
 .trio p { font-size: 13px; line-height: 1.7; opacity: .92; } .trio b { color: var(--fire); }
-.trio em { font-style: normal; color: var(--red); font-size: 12px; }
+.trio em { font-style: normal; color: #ff8f9c; font-size: 12px; }
 #result small { font-family: var(--latin); letter-spacing: .6em; color: var(--gold); font-size: 12px; }
 #result p { margin: 16px auto; max-width: 30em; line-height: 2; letter-spacing: .1em; font-size: 15px; }
 #result-stats { font-size: 12px !important; opacity: .65; }

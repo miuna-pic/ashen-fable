@@ -192,16 +192,16 @@ let down = null;
 stage.addEventListener('pointerdown', (e) => { down = { x: e.clientX, y: e.clientY }; });
 stage.addEventListener('pointerup', (e) => {
   if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 14 || busy || state.result) return;
-  const { tile, unit } = view.pick(e.clientX, e.clientY);
-  // 点到立牌身体时，射线落地的格子在她身后：那不是玩家想点的格子
-  const body = unit ? R.piece(state, unit) : null;
-  const behindStandee = body && body.at !== tile;
-  if (selected && tile != null && !behindStandee) {
+  const hit = view.pick(e.clientX, e.clientY);
+  // 点到立牌的身体（不透明处）就是点她站的格子，而不是射线落在她身后的那格
+  const body = hit.unit ? R.piece(state, hit.unit) : null;
+  const tile = body ? body.at : hit.tile;
+  if (selected && tile != null && body?.id !== selected) {
     const a = R.actionsFor(state, selected).find((x) => x.to === tile);
     if (a) return act(a);
   }
   const onTile = tile != null ? R.pieceAt(state, tile) : null;
-  const id = unit ?? (onTile && R.isHeroine(onTile) ? onTile.id : null);
+  const id = onTile && R.isHeroine(onTile) ? onTile.id : null;
   select(id && id !== selected ? id : null);
 });
 stage.addEventListener('pointermove', (e) => {

@@ -196,6 +196,18 @@ export function createScene(canvas) {
 
   // —— 棋子 ——
   const units = new Map();
+  const alphas = new Map(); // 立绘的透明度图：点在透明处不算点到人
+  function alphaMap(img) {
+    const w = 48, h = Math.max(1, Math.round(48 * img.height / img.width));
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0, w, h);
+    return { w, h, data: g.getImageData(0, 0, w, h).data };
+  }
+  function opaqueAt(kind, uv) {
+    const m = alphas.get(kind); if (!m || !uv) return true;
+    const x = Math.min(m.w - 1, Math.floor(uv.x * m.w)), y = Math.min(m.h - 1, Math.floor((1 - uv.y) * m.h));
+    return m.data[(y * m.w + x) * 4 + 3] > 60;
+  }
   const portraits = new Map(); // 每个角色的立绘只加载一次，棋子重建时复用
   const SHARED = new Set();
   function dropUnit(u) {
@@ -229,7 +241,7 @@ export function createScene(canvas) {
       u.body.scale.set(h * 0.66, h, 1);
       const show = (t) => { mat.map = t; mat.visible = true; mat.needsUpdate = true; u.body.scale.set(h * t.image.width / t.image.height, h, 1); };
       if (portraits.has(p.kind)) show(portraits.get(p.kind));
-      else loader.load(`./art/${p.kind}.webp`, (t) => { t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; portraits.set(p.kind, t); show(t); });
+      else loader.load(`./art/${p.kind}.webp`, (t) => { t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; portraits.set(p.kind, t); alphas.set(p.kind, alphaMap(t.image)); show(t); });
       const base = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.3, 0.05, 24), new THREE.MeshStandardMaterial({ color: p.kind === 'queen' ? '#9fdcff' : '#e9e2d2', metalness: 0.1, roughness: 0.6, emissive: p.kind === 'queen' ? '#1a6aa8' : '#000' }));
       base.position.y = 0.03;
       g.add(base, u.pivot);
@@ -286,7 +298,7 @@ export function createScene(canvas) {
   let slow = 0, sampled = 0, fpsN = 0, fpsT = 0, fpsLast = performance.now(), fpsEl = null;
   if (new URLSearchParams(location.search).has('fps')) {
     fpsEl = document.createElement('div');
-    fpsEl.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:20;font:12px monospace;color:#8fe3ff;background:rgba(0,0,0,.6);padding:2px 6px;pointer-events:none';
+    fpsEl.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:20;font:12px ui-monospace,monospace,sans-serif;color:#8fe3ff;background:rgba(0,0,0,.6);padding:2px 6px;pointer-events:none';
     document.body.append(fpsEl);
   }
   let shake = 0, pointer = { x: 0, y: 0 }, portrait = false;
@@ -380,9 +392,11 @@ export function createScene(canvas) {
       const x = Math.round(hitPoint.x + HALF), y = Math.round(hitPoint.z + HALF);
       if (x >= 0 && y >= 0 && x < N && y < N) tile = y * N + x;
     }
-    const bodies = [...units.values()].filter((u) => u.pivot && u.kind !== 'queen');
-    const hit = ray.intersectObjects(bodies.map((u) => u.body), false)[0];
-    if (hit) unit = bodies.find((u) => u.body === hit.object).id;
+    const bodies = [...units.values()].filter((u) => u.pivot);
+    for (const hit of ray.intersectObjects(bodies.map((u) => u.body), false)) {
+      const u = bodies.find((b) => b.body === hit.object);
+      if (opaqueAt(u.kind, hit.uv)) { unit = u.id; break; }
+    }
     return { tile, unit };
   }
   function project(i, height = 1.2) {
@@ -396,7 +410,7 @@ export function createScene(canvas) {
   let time = 0;
   function frame() {
     const dt = Math.min(clock.getDelta(), 0.1); time += dt;
-    if (fpsEl) { const now = performance.now(); fpsN++; fpsT += (now - fpsLast) / 1000; fpsLast = now; if (fpsT >= 1) { fpsEl.textContent = `${Math.round(fpsN / fpsT)} fps · 画质 ${quality}`; fpsN = 0; fpsT = 0; } }
+    if (fpsEl) { const now = performance.now(); fpsN++; fpsT += (now - fpsLast) / 1000; fpsLast = now; if (fpsT >= 1) { fpsEl.textContent = `${Math.round(fpsN / fpsT)} fps · Q${quality}`; fpsN = 0; fpsT = 0; } }
     for (let k = tweens.length - 1; k >= 0; k--) {
       const t = tweens[k]; t.t += dt * 1000; const q = Math.min(1, t.t / t.ms); t.fn(q);
       if (q >= 1) { tweens.splice(k, 1); t.res(); }
