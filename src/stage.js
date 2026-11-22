@@ -8,14 +8,13 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { W, H, X, Y, KINDS } from './rules.js';
 import { createScenery } from './scenery.js';
 import { createVfx, HUE } from './vfx.js';
+import { createCharacters } from './characters.js';
 
 const ease = (t) => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 const out = (t) => 1 - Math.pow(1 - t, 3);
 const local = (s) => new T.Vector3(X(s) - (W - 1) / 2, 0, Y(s) - (H - 1) / 2);
 const loader = new T.TextureLoader();
 const tex = (name) => { const t = loader.load(`./art/${name}.webp`); t.colorSpace = T.SRGBColorSpace; t.anisotropy = 4; return t; };
-const ASPECT = { alice_a: 433 / 720, alice_b: 460 / 720, soldier: 368 / 720, hollow: 341 / 720, rook: 435 / 720, cat: 473 / 720, knight: 445 / 720, queen: 465 / 720, shadow: 472 / 720 };
-const HEIGHT = { queen: 1.75, shadow: 1.7, rook: 1.5, knight: 1.5 };
 
 function glyph(draw, size = 256) {
   const c = document.createElement('canvas'); c.width = c.height = size; const g = c.getContext('2d');
@@ -81,27 +80,26 @@ export function createStage(canvas) {
   }
 
 
-  // Pieces are standees: face 0 stands on the glass, face 1 hangs beneath it.
+  // Pieces are sculpted figures: face 0 stands on the glass, face 1 hangs beneath it.
   const pieces = new Map(); const textures = {};
-  function standee(name, face) {
-    textures[name] ||= tex(name);
-    const h = HEIGHT[name] || 1.34, g = new T.Group(), body = new T.Mesh(plane, new T.MeshBasicMaterial({ map: textures[name], transparent: true, alphaTest: .35, side: T.DoubleSide, toneMapped: false }));
-    body.scale.set(h * ASPECT[name], h, 1); body.position.y = h / 2 - .03; body.rotation.x = -.16;
-    const shade = lay(flat(GLYPH.blob, face ? '#ff1d3a' : '#27304d', face ? .5 : .45), 0, .95); shade.position.y = .004;
-    const inner = new T.Group(); inner.add(body, shade); if (face) inner.rotation.z = Math.PI; g.add(inner); g.userData = { body, inner, h, face, shade }; world.add(g); return g;
-  }
+  const chars = createCharacters({
+    world,
+    shadow: (face) => lay(flat(GLYPH.blob, face ? '#ff1d3a' : '#27304d', face ? .5 : .45), 0, .95),
+    placeholder: (name, h, aspect) => { textures[name] ||= tex(name); const m = new T.Mesh(plane, new T.MeshBasicMaterial({ map: textures[name], transparent: true, alphaTest: .35, side: T.DoubleSide, toneMapped: false })); m.scale.set(h * aspect, h, 1); m.position.y = h / 2 - .03; m.rotation.x = -.16; return m; },
+  });
   // Whoever hangs in the far world is drawn before the glass, so the board tints them like a reflection.
   function order(face) {
-    for (const g of [...pieces.values(), ...corpses, ...(alice || [])]) { const near = g.userData.face === face; g.userData.body.renderOrder = near ? 0 : -4; g.userData.shade.visible = near; }
+    for (const g of [...pieces.values(), ...corpses, ...(alice || [])]) chars.setNear(g, g.userData.face === face);
     marks.forEach((m, side) => { m.visible = side === face; });
   }
   let alice = null, corpses = [], flipped = 0, state = null, busy = 0;
-  const clear = () => { for (const g of [...pieces.values(), ...corpses, ...(alice || [])]) world.remove(g); pieces.clear(); corpses = []; alice = null; };
+  const clear = () => { for (const g of [...pieces.values(), ...corpses, ...(alice || [])]) chars.remove(g); pieces.clear(); corpses = []; alice = null; };
   function load(st) {
     clear(); state = st;
-    alice = [standee('alice_a', 0), standee('alice_b', 1)]; alice.forEach((g) => g.position.copy(local(st.alice)));
-    for (const e of st.enemies) { const g = standee(KINDS[e.kind].key, e.face); g.position.copy(local(e.at)); pieces.set(e.id, g); }
-    for (const c of st.corpses) for (const face of [0, 1]) { const g = standee('alice_a', face); g.position.copy(local(c)); const b = g.userData.body; b.material.color.set(face ? '#7a0d1c' : '#3b3340'); b.rotation.z = 1.25; b.scale.multiplyScalar(.8); b.position.set(.1, .34, 0); corpses.push(g); }
+    alice = [chars.spawn('alice_a', 0), chars.spawn('alice_b', 1)]; alice.forEach((g) => g.position.copy(local(st.alice)));
+    for (const e of st.enemies) { const g = chars.spawn(KINDS[e.kind].key, e.face); g.position.copy(local(e.at)); pieces.set(e.id, g); }
+    // Every Alice who died here still lies where she fell, on both sides of the glass.
+    st.corpses.forEach((c, i) => { for (const face of [0, 1]) { const g = chars.spawn(face ? 'alice_b' : 'alice_a', face); g.position.copy(local(c)); const p = g.userData.pose; p.fall = 1; p.grey = .85; p.still = true; p.yaw = (i * 2.4 + face) % 1.2 - .6; g.userData.char.u.uTint.value.set(face ? '#8a2030' : '#77708a'); g.scale.setScalar(.86); corpses.push(g); } });
     scenery.setBoard(st); order(flipped);
     tiles.forEach((pair, s) => pair.forEach((f) => { f.goal.visible = s === st.goal; f.goal.material.map = GLYPH.goal; f.goal.material.color.set('#ffd774'); f.goal.material.opacity = .95; }));
   }
@@ -133,31 +131,62 @@ export function createStage(canvas) {
     for (let i = 0; i < 4; i++) vfx.burst(local([0, W - 1, W * (H - 1), W * H - 1][i]), side, { count: 14, speed: 1.4, up: 1.2, y: .2, life: 1.1, size: .09, g: -.6, colors: face ? HUE.ember : HUE.gold, add: face ? 1 : .5 });
     fx.punch = 0; busy--;
   }
-  const hop = (g, a, b, ms, lift) => tween(ms, (k) => { g.position.lerpVectors(a, b, k); g.userData.inner.position.y = Math.sin(k * Math.PI) * lift; });
+  // Acting. A figure's pose is plain numbers; characters.js turns them into motion every frame.
+  const act = (g) => g.userData.pose;
+  const back = (t) => { const c = 2.2; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); };
+  // Jump: crouch, leap leaning into the travel, land with a squash that springs back.
+  async function hop(g, a, b, ms, lift) {
+    const p = act(g), dx = b.x - a.x, dz = b.z - a.z, n = Math.hypot(dx, dz) || 1, turn = Math.max(-.55, Math.min(.55, dx / n * .55)) * (g.userData.char.face ? -1 : 1);
+    await tween(70, (k) => { p.squash = k * .14; p.yaw = turn * k * .5; }, out);
+    await tween(ms, (k) => { g.position.lerpVectors(a, b, k); const arc = Math.sin(k * Math.PI); p.lift = arc * lift; p.squash = .14 * (1 - k * 4) * (k < .25 ? 1 : 0) - arc * .08; p.lean.set(dx / n * .16 * arc, dz / n * .16 * arc); p.yaw = turn * (.5 + .5 * Math.min(1, k * 2)); });
+    p.lift = 0; p.lean.set(0, 0);
+    tween(300, (k) => { p.squash = .2 * (1 - back(k)); p.yaw = turn * (1 - k); }, (t) => t).then(() => { p.squash = 0; p.yaw = 0; });
+  }
+  // Glide: the mirror body never leaves the glass; she streaks along it, hair and skirt streaming behind.
+  async function glide(g, a, b, ms) {
+    const p = act(g), dx = b.x - a.x, dz = b.z - a.z, n = Math.hypot(dx, dz) || 1, turn = Math.max(-.55, Math.min(.55, dx / n * .55)) * (g.userData.char.face ? -1 : 1);
+    await tween(ms, (k) => { g.position.lerpVectors(a, b, k); const arc = Math.sin(k * Math.PI); p.lean.set(dx / n * .3 * arc, dz / n * .3 * arc); p.squash = arc * .07; p.yaw = turn * arc; p.twist = Math.sin(k * 9) * .25 * arc; }, out);
+    p.lean.set(0, 0); p.squash = 0; p.yaw = 0; p.twist = 0;
+  }
+  // A taken piece is wrung like a rag, flashes, and burns to ash from the feet up.
+  async function perish(g) {
+    const p = act(g); p.still = true;
+    await tween(150, (k) => { p.flash = k; p.squash = -.12 * k; p.twist = k * 1.2; }, out);
+    await tween(560, (k) => { p.flash = 1 - k; p.dissolve = k; p.twist = 1.2 + k * 2.4; p.lift = k * .35; p.squash = -.12 - k * .1; });
+    g.visible = false;
+  }
   async function animate(ev, hooks) {
     busy++;
     for (const e of ev) {
-      if (e.t === 'move') { const a = local(e.from), b = local(e.to), far = a.distanceTo(b) > 1.6, side = e.face ? -1 : 1;
-        if (e.face === 1) { hooks.sfx('slide'); vfx.streak(a, b, -1, { count: 10 + a.distanceTo(b) * 9, life: .7, size: .12, h: 1.2, colors: HUE.ember, drag: 1 }); vfx.streak(a, b, 1, { count: 6, life: .5, size: .1, h: .2, colors: HUE.ink, add: 0 }); }
+      if (e.t === 'move') { const a = local(e.from), b = local(e.to), d = a.distanceTo(b), far = d > 1.6, side = e.face ? -1 : 1;
+        if (e.face === 1) { hooks.sfx('slide'); vfx.streak(a, b, -1, { count: 10 + d * 9, life: .7, size: .12, h: 1.2, colors: HUE.ember, drag: 1 }); vfx.streak(a, b, 1, { count: 6, life: .5, size: .1, h: .2, colors: HUE.ink, add: 0 }); }
         else { hooks.sfx('step'); vfx.ring(a, 1, '#3d6bff', .7, 380); }
-        await Promise.all(alice.map((g) => hop(g, a, b, far ? 300 : 260, e.face ? 0 : .28)));
+        // The leading body acts; the other one is dragged after her a beat late.
+        if (e.face === 1) await Promise.all([glide(alice[1], a, b, 240 + d * 45), tween(60, () => {}).then(() => glide(alice[0], a, b, 240 + d * 45))]);
+        else await Promise.all([hop(alice[0], a, b, far ? 320 : 280, .34), tween(50, () => {}).then(() => hop(alice[1], a, b, far ? 320 : 280, .12))]);
         vfx.ring(b, side, e.face ? '#ff2a3c' : '#2f5cff', e.face ? 1.5 : 1.0, 480); vfx.ring(b, -side, e.face ? '#b9c6ff' : '#ff2a3c', .7, 420);
         vfx.burst(b, side, { count: e.face ? 16 : 8, speed: e.face ? 1.6 : .9, up: .5, y: .1, h: .1, life: .55, size: .09, colors: e.face ? HUE.ember : HUE.snow, add: e.face ? 1 : .25 });
         if (e.face === 1) kick(.22); }
-      if (e.t === 'capture') { const g = pieces.get(e.id), at = g.position, side = e.face ? -1 : 1; hooks.sfx('kill'); hooks.cutin(e.face); kick(.5, 420); flare(.22);
+      if (e.t === 'capture') { const g = pieces.get(e.id), at = g.position, side = e.face ? -1 : 1, p = act(alice[e.face]); hooks.sfx('kill'); hooks.cutin(e.face); kick(.5, 420); flare(.22);
         vfx.ring(at, side, e.face ? '#ffffff' : '#ff1f3d', 2.4, 600, e.face ? 1 : .3, .07);
         vfx.burst(at, side, { count: 46, speed: 3.4, up: .5, spread: 1.2, y: .7, h: 1, life: .8, size: .13, g: 5, colors: e.face ? HUE.ghost : HUE.blood, add: e.face ? 1 : .05 });
         vfx.burst(at, side, { count: 14, speed: 1.2, up: 1.5, y: .6, life: 1.3, size: .2, g: -.5, colors: e.face ? HUE.ember : HUE.gold, add: e.face ? 1 : .5 });
-        await tween(420, (k) => { g.userData.body.material.color.setScalar(1 + 6 * (1 - k)); g.scale.set(1 + k * .5, 1 - k, 1); }, out); g.visible = false; }
-      if (e.t === 'shift') { const g = pieces.get(e.id), b = local(e.to); hooks.sfx('tick'); await hop(g, local(e.from), b, 240, .22); vfx.ring(b, g.userData.face ? -1 : 1, g.userData.face ? '#ff2a3c' : '#c21733', .8, 360); }
-      if (e.t === 'strike') { const g = pieces.get(e.id), a = g.position.clone(), b = local(e.at); hooks.sfx('death');
-        await tween(170, (k) => { g.position.lerpVectors(a, b, k * .8); }, out); fx.hurt = 1; kick(.8, 700); flare(.2);
+        // Alice finishes with a pirouette while the piece burns.
+        tween(520, (k) => { p.spin = k * Math.PI * 2; p.lift = Math.sin(k * Math.PI) * .22; p.twist = Math.sin(k * Math.PI) * -.5; }, out).then(() => { p.spin = 0; p.lift = 0; p.twist = 0; });
+        await perish(g); }
+      if (e.t === 'shift') { const g = pieces.get(e.id), b = local(e.to); hooks.sfx('tick'); await hop(g, local(e.from), b, 250, .2); vfx.ring(b, g.userData.face ? -1 : 1, g.userData.face ? '#ff2a3c' : '#c21733', .8, 360); }
+      if (e.t === 'strike') { const g = pieces.get(e.id), a = g.position.clone(), b = local(e.at), q = act(g), dx = b.x - a.x, dz = b.z - a.z, n = Math.hypot(dx, dz) || 1; hooks.sfx('death');
+        // Wind up, lunge, and Alice folds on both sides of the glass at once.
+        await tween(160, (k) => { q.squash = k * .16; q.lean.set(-dx / n * .12 * k, -dz / n * .12 * k); }, out);
+        await tween(150, (k) => { g.position.lerpVectors(a, b, k * .8); q.squash = .16 - k * .26; q.lean.set(dx / n * (.34 * k - .12), dz / n * (.34 * k - .12)); q.twist = -k * .5; }, out); fx.hurt = 1; kick(.8, 700); flare(.2);
         for (const side of [1, -1]) { vfx.ring(b, side, '#ff1030', 3.2, 800, side < 0 ? 1 : .2, .06); vfx.burst(b, side, { count: 44, speed: 3.6, up: .7, spread: 1.4, y: .6, h: .9, life: 1, size: .14, g: 4, colors: side < 0 ? HUE.ember : HUE.blood, add: side < 0 ? 1 : .05 }); }
-        await tween(700, (k) => { alice.forEach((al) => { al.userData.body.rotation.z = k * 1.25; al.userData.body.position.y = al.userData.h / 2 - k * .4; }); g.position.lerpVectors(b, a, k).lerp(b, .8 * (1 - k)); }, out);
+        alice.forEach((al) => { act(al).still = true; });
+        await tween(700, (k) => { alice.forEach((al) => { const p = act(al); p.fall = back(Math.min(1, k * 1.15)); p.flash = Math.max(0, .9 - k * 4); p.grey = k * .85; }); g.position.lerpVectors(b, a, k).lerp(b, .8 * (1 - k)); q.squash = -.1 * (1 - k); q.lean.multiplyScalar(.9); q.twist = -.5 * (1 - k); }, out);
+        q.lean.set(0, 0);
         await tween(500, (k) => { fx.hurt = 1 - k; }); }
       if (e.t === 'win') { hooks.sfx('win'); const at = alice[0].position; flare(.3, 900);
         for (const side of [1, -1]) { vfx.ring(at, side, side > 0 ? '#ffd774' : '#ffb04a', 3.5, 1000, side < 0 ? 1 : .6, .05); vfx.burst(at, side, { count: 60, speed: 1.3, up: 2.4, spread: 2, y: .3, h: .4, r: .7, life: 1.6, size: .13, g: -1.2, drag: .8, colors: HUE.gold, add: side < 0 ? 1 : .6 }); }
-        await tween(700, (k) => { alice.forEach((g) => { g.userData.inner.position.y = k * 1.2; g.userData.body.material.color.setScalar(1 + k * 4); }); fx.punch = k * .5; }); fx.punch = 0; }
+        await tween(900, (k) => { alice.forEach((g) => { const p = act(g); p.lift = k * 1.2; p.spin = k * k * Math.PI * 4; p.flash = k * k * .9; p.squash = -k * .12; }); fx.punch = k * .5; }); fx.punch = 0; }
     }
     busy--;
   }
@@ -197,7 +226,7 @@ export function createStage(canvas) {
     scenery.update(t, dt); vfx.update(dt, canvas.clientHeight);
     const pulse = .5 + .5 * Math.sin(t * 4);
     tiles.forEach((pair) => pair.forEach((f) => { if (f.goal.visible) f.goal.material.opacity = .6 + .4 * pulse; }));
-    for (const g of pieces.values()) g.userData.body.position.y = g.userData.h / 2 - .03 + Math.sin(t * 1.6 + g.position.x * 2 + g.position.z) * .018;
+    chars.update(t, dt);
     final.uniforms.time.value = t; final.uniforms.punch.value = fx.punch; final.uniforms.hurt.value = fx.hurt; final.uniforms.flash.value = fx.flash;
     final.uniforms.dark.value += ((flipped ? 1 : 0) - final.uniforms.dark.value) * .08; bloom.strength = .14 + final.uniforms.dark.value * .3; bloom.threshold = .9 - final.uniforms.dark.value * .25;
     composer.render(); requestAnimationFrame(frame);
