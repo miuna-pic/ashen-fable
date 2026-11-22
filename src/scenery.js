@@ -341,30 +341,50 @@ export function createScenery(world) {
       vec3 lp = inv * wp, n = normalize(inv * wn), v = normalize(lp - inv * cameraPosition);
       float m = step(lp.y, 0.), hy = abs(lp.y) / tall, ang = atan(lp.x - base.x, lp.z - base.z);
       bool back = dot(n, v) > 0.; if (back) n = -n;
-      // the mirror's towers are snapped off, each at its own height, along a slanted splintered line
-      float snap = .7 + seed * .24 + sin(ang + seed * 9.) * .07 + abs(fract(ang * 1.6 + seed * 5.) - .5) * .1;
+      // the mirror's towers are snapped off, each at its own height: whole blocks of masonry gone, not a saw edge
+      float sect = ang * 1.2732 + seed * 5., blockH = hash(vec2(floor(sect), seed * 31.)) * .16;
+      float snap = .66 + seed * .2 + sin(ang + seed * 9.) * .06 + blockH + smoothstep(.42, .5, abs(fract(sect) - .5)) * .03;
       if (m > .5 && hy > snap) discard;
-      vec3 L = normalize(vec3(-.55, mix(.5, -.5, m), .65));
+      vec3 L = normalize(vec3(-.85, mix(.45, -.45, m), .2));   // from the side, so every tower shows a lit flank and a shaded one
       float d = dot(n, L), key = clamp(d, 0., 1.), wrap = d * .5 + .5, fr = pow(1. - clamp(dot(-v, n), 0., 1.), 2.5);
-      float course = smoothstep(.44, .5, abs(fract(hy * 16. + seed) - .5));                                   // courses of stone
-      vec2 w = vec2(ang * 1.5915 + floor(hy * 9.) * .37 + seed * 3., hy * 9.), wf = abs(fract(w) - .5);
-      float lit = step(wf.x, .11) * step(wf.y, .27) * step(.5, hash(floor(w) + seed * 17.)) * step(.16, hy) * step(hy, .68);
-      // surface: sunlit porcelain with lilac shade and gilt courses
-      vec3 a = mix(vec3(.40, .38, .78), vec3(1., .96, .94), smoothstep(.15, .8, wrap)) + vec3(1., .9, .8) * pow(key, 12.) * .25;
-      a = mix(a, vec3(.95, .72, .36) * (.5 + .7 * key), course * .7) + vec3(.75, .8, 1.) * fr * .35;
-      a = mix(a, vec3(1., .78, .4) * 1.15, lit * .9);
-      // mirror: charred stone, a hard crimson rim, embers in the joints and the windows
-      vec3 b = mix(vec3(.022, .006, .012), vec3(.34, .03, .07), key * key) + vec3(1., .10, .16) * fr * .8;
-      float crack = smoothstep(.06, .0, abs(noise(vec2(ang * 3. + seed * 7., hy * 11.)) - .5)) * step(.2, hy);
-      b += vec3(1., .16, .1) * (course * .35 + crack * .5 * (.6 + .4 * sin(time * 1.1 + seed * 20. + hy * 9.)));
-      b = mix(b, vec3(1., .2, .22) * 1.5, lit);
-      b = mix(b, vec3(1., .35, .25) * 1.4, smoothstep(snap - .02, snap, hy));                                 // the break still glows
-      if (back) b = vec3(.5, .03, .05) * (1. - hy * .6);                                                      // looking into the hollow
+      float up = abs(n.y), ledge = smoothstep(.45, .8, up);                                                   // collars, crowns and plinths: wherever the turned shape flares
+      float under = smoothstep(.2, .7, -n.y * mix(1., -1., m));                                               // their undersides sit in shade
+      float course = smoothstep(.46, .5, abs(fract(hy * 22. + seed) - .5));                                   // courses of stone
+      float brick = smoothstep(.47, .5, abs(fract(ang * 3.5 + floor(hy * 22. + seed) * .5) - .5));
+      float band = smoothstep(.42, .5, abs(fract(hy * 5. + seed * .7) - .5));                                 // a few broad belts
+      // tall arched windows in rings
+      vec2 w = vec2(ang * 1.5915 + floor(hy * 5.) * .37 + seed * 3., hy * 5.), wq = fract(w) - .5;
+      float arch = max(abs(wq.x) - .10, wq.y > .08 ? length(vec2(wq.x, wq.y - .08)) - .10 : abs(wq.y + .06) - .14);
+      float open = step(.45, hash(floor(w) + seed * 17.)) * step(.18, hy) * step(hy, .62) * (1. - ledge);
+      float win = (1. - smoothstep(.0, .02, arch)) * open, sill = (1. - smoothstep(.02, .05, arch)) * open - win;
+      // surface: porcelain in strong light. Sun-warm on one side, deep periwinkle on the other, sapphire roofs and gilt belts,
+      // and an inked edge so the shape holds against a pale sky
+      vec3 a = mix(vec3(.30, .30, .74), vec3(1., .95, .92), smoothstep(.25, .75, wrap));
+      a = mix(a, a * vec3(.78, .80, .95), (course + brick * .6) * .35);
+      a = mix(a, mix(vec3(.16, .22, .66), vec3(.42, .56, 1.), wrap), smoothstep(.84, .87, hy));               // roof
+      a = mix(a, vec3(1., .78, .36) * (.45 + .75 * wrap), max(band, ledge) * .92);                            // gilt
+      a = mix(a, vec3(.20, .16, .50), under * .6);
+      a = mix(a, vec3(.98, .84, .50), sill * .9);
+      a = mix(a, mix(vec3(.10, .12, .40), vec3(1., .80, .45), hash(floor(w) + seed * 3.)), win);              // some lit, some dark
+      a += vec3(1., .92, .8) * pow(key, 14.) * .3;
+      a = mix(a, vec3(.20, .17, .52), fr * .55);
+      // mirror: ash-grey stone that shows its volume, iron belts, mortar in shadow, fire only in the cracks, windows and the break
+      vec3 b = mix(vec3(.022, .008, .020), vec3(.26, .075, .10), smoothstep(.45, 1., wrap));
+      b *= 1. - (course + brick * .7) * .55;
+      b = mix(b, vec3(.05, .01, .02) + vec3(.55, .08, .08) * pow(key, 3.), max(band, ledge) * .85);
+      b *= 1. - under * .7;
+      float crack = smoothstep(.05, .0, abs(noise(vec2(ang * 3. + seed * 7., hy * 9.)) - .5)) * step(.15, hy);
+      b += vec3(1., .22, .1) * crack * (.45 + .35 * sin(time * 1.1 + seed * 20. + hy * 9.));
+      b = mix(b, vec3(.9, .5, .25), sill * .5);
+      b = mix(b, vec3(1., .26, .16) * (1.1 + .5 * hash(floor(w) + seed * 3.)), win);
+      b += vec3(1., .08, .14) * pow(fr, 1.6) * .9;
+      b = mix(b, vec3(1., .42, .22) * 1.5, smoothstep(snap - .012, snap, hy));                                // the break still glows
+      if (back) b = mix(vec3(1., .30, .10), vec3(.10, .0, .02), smoothstep(snap - .5, snap, hy)) * (.4 + .6 * wrap);   // looking into the hollow: lit from below
       vec3 col = mix(a, b, m);
-      col = mix(col, mix(vec3(.80, .74, .97), vec3(.30, .02, .06), m), haze * .55);                           // far ones sink into their sky
+      col = mix(col, mix(vec3(.72, .70, .98), vec3(.22, .01, .04), m), haze * mix(.38, .5, m));               // far ones sink into their sky
       gl_FragColor = vec4(col, smoothstep(.0, .14, hy));                                                      // the foot is lost in sea mist
     }`;
-  const lathes = PROFILES.map((p) => new T.LatheGeometry(p.map(([y, w]) => new T.Vector2(Math.max(w * .66, .001), y)), 20));
+  const lathes = PROFILES.map((p) => new T.LatheGeometry(p.map(([y, w]) => new T.Vector2(Math.max(w * .66, .001), y)), 36));
   const towers = [1, -1].map((side) => {
     const g = new T.Group();
     for (let i = 0; i < 9; i++) {
