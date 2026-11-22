@@ -1,111 +1,87 @@
-// 3D characters: sculpted meshes with a hand-written anime shader (ink outline, rim light, cloth and hair
-// that trail behind the body, ash dissolve) and procedural acting. The 2D standee shows until a model arrives.
+// Characters: each figure is its illustration pressed into a relief. A depth map sculpted from the same drawing
+// pushes the body out of the card, so it catches rim light and turns with real parallax, while the line art stays
+// exactly as drawn. A second channel says which parts swing (hair, ribbons, hems); everything else is procedural acting.
 import * as T from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 
-// Board height of each figure, and how wide its 2D placeholder is.
+// Board height of each figure, how wide its illustration is, and how deep its relief is (in figure heights).
 const CAST = {
-  alice_a: { h: 1.3, aspect: 433 / 720 }, alice_b: { h: 1.3, aspect: 460 / 720 },
-  soldier: { h: 1.3, aspect: 368 / 720 }, hollow: { h: 1.3, aspect: 341 / 720 },
-  rook: { h: 1.55, aspect: 435 / 720 }, cat: { h: 1.25, aspect: 473 / 720 }, knight: { h: 1.6, aspect: 445 / 720 },
-  queen: { h: 1.8, aspect: 465 / 720 }, shadow: { h: 1.75, aspect: 472 / 720 },
+  alice_a: { h: 1.3, aspect: 433 / 720, depth: .22 }, alice_b: { h: 1.3, aspect: 460 / 720, depth: .24 },
+  soldier: { h: 1.3, aspect: 368 / 720, depth: .3 }, hollow: { h: 1.3, aspect: 341 / 720, depth: .27 },
+  rook: { h: 1.55, aspect: 435 / 720, depth: .32 }, cat: { h: 1.25, aspect: 473 / 720, depth: .38 }, knight: { h: 1.6, aspect: 445 / 720, depth: .26 },
+  queen: { h: 1.8, aspect: 465 / 720, depth: .33 }, shadow: { h: 1.75, aspect: 472 / 720, depth: .33 },
 };
 // Each world lights its dolls differently: cold porcelain above the glass, ember below it.
 const WORLD = [
-  { rim: '#bcd6ff', rimPow: .55, ink: '#1b1020', glow: 0, ash: '#ffe9c4' },
-  { rim: '#ff2a4d', rimPow: 1.15, ink: '#ff1d3a', glow: .55, ash: '#ff3b2f' },
+  { rim: '#bcd6ff', rimPow: .5, ash: '#ffe9c4' },
+  { rim: '#ff2a4d', rimPow: .6, ash: '#ff3b2f' },
 ];
 
-const DEFORM = /* glsl */`
-  attribute float _sway;
-  uniform float uTime, uPhase, uSquash, uTwist, uBreath;
+const VERT = /* glsl */`
+  uniform sampler2D relief; uniform float uTime, uPhase, uSquash, uTwist, uBreath, uDepth, uAspect;
   uniform vec3 uLag; uniform vec2 uLean;
-  vec3 deform(vec3 p, float grow) {
-    float y = p.y;
+  varying vec2 vUv; varying vec3 vV, vP; varying mat3 vNM;
+  void main() {
+    vUv = uv; vec4 r = texture2D(relief, uv);
+    float y = uv.y, w = r.g * smoothstep(0., .08, y);
+    vec3 p = vec3((uv.x - .5) * uAspect, y, (r.r - .5) * uDepth);
+    vP = p; vNM = normalMatrix;
     // breathing and a slow weight shift
     float chest = smoothstep(.25, .6, y) * (1. - smoothstep(.6, .8, y));
-    p.xz *= 1. + chest * .022 * sin(uTime * 1.9 + uPhase) * uBreath;
-    p.x += sin(uTime * 1.05 + uPhase) * .014 * y * y * uBreath;
+    p.x *= 1. + chest * .02 * sin(uTime * 1.9 + uPhase) * uBreath;
+    p.x += sin(uTime * 1.05 + uPhase) * .012 * y * y * uBreath;
     p.y += sin(uTime * 1.9 + uPhase) * .006 * smoothstep(.3, 1., y) * uBreath;
     // hair, skirts and ribbons: wind plus inertia, so they trail the body and overshoot when it stops
-    float w = _sway;
-    vec3 wind = vec3(sin(uTime * 2.3 + y * 7. + uPhase), 0., cos(uTime * 1.7 + y * 5. + uPhase * 1.3)) * .012;
+    vec3 wind = vec3(sin(uTime * 2.3 + y * 7. + uPhase), 0., cos(uTime * 1.7 + y * 5. + uPhase * 1.3)) * .014;
     p += (wind * uBreath + uLag * (.35 + y * .9)) * w;
     p.y -= length(uLag.xz) * w * .25;
     // whole-body acting
     float a = uTwist * y, c = cos(a), s = sin(a); p.xz = mat2(c, -s, s, c) * p.xz;
     p.xz += uLean * y * y;
     p.y *= 1. - uSquash; p.xz *= 1. + uSquash * .55 * (1. - y * .5);
-    return p;
-  }`;
-const VERT = /* glsl */`
-  ${DEFORM}
-  uniform float uInk;
-  varying vec2 vUv; varying vec3 vN, vV, vP;
-  void main() {
-    vUv = uv; vP = position;
-    vec3 p = deform(position, 0.);
-    vec4 mv = modelViewMatrix * vec4(p, 1.);
-    vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz);
-    #ifdef INK
-      // inverted hull, kept the same width on screen at any distance
-      vec4 clip = projectionMatrix * mv; vec3 n = normalize(normalMatrix * normal);
-      vec2 off = normalize((projectionMatrix * vec4(n, 0.)).xy + 1e-5);
-      // thin strands get a hairline, solid forms the full stroke; pushed back so the line never crosses the face
-      clip.xy += off * uInk * (1. - .75 * _sway) * clip.w; clip.z += .0015 * clip.w; gl_Position = clip;
-    #else
-      gl_Position = projectionMatrix * mv;
-    #endif
+    vec4 mv = modelViewMatrix * vec4(p, 1.); vV = normalize(-mv.xyz);
+    gl_Position = projectionMatrix * mv;
   }`;
 const FRAG = /* glsl */`
-  uniform sampler2D map; uniform vec3 uRim, uInkColor, uTint, uAsh; uniform float uRimPow, uFlash, uDissolve, uGlow, uGrey, uTime;
-  varying vec2 vUv; varying vec3 vN, vV, vP;
+  uniform sampler2D map, relief; uniform vec3 uRim, uTint, uAsh; uniform float uRimPow, uFlash, uDissolve, uGrey, uDepth, uAspect; uniform vec2 uTexel;
+  varying vec2 vUv; varying vec3 vV, vP; varying mat3 vNM;
   float h(vec3 v){ return fract(sin(dot(v, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
   float n3(vec3 v){ vec3 i = floor(v), f = fract(v); f = f*f*(3.-2.*f);
     return mix(mix(mix(h(i), h(i+vec3(1,0,0)), f.x), mix(h(i+vec3(0,1,0)), h(i+vec3(1,1,0)), f.x), f.y),
                mix(mix(h(i+vec3(0,0,1)), h(i+vec3(1,0,1)), f.x), mix(h(i+vec3(0,1,1)), h(i+vec3(1,1,1)), f.x), f.y), f.z); }
   void main() {
+    vec4 c = texture2D(map, vUv);
+    if (c.a < .35) discard;
     // burn away from the feet up, in flakes
     float burn = n3(vP * 14.) * .6 + n3(vP * 41.) * .25 + (1. - vP.y) * .15;
     float edge = burn - uDissolve * 1.15;
     if (uDissolve > 0. && edge < 0.) discard;
-    #ifdef INK
-      vec3 col = uInkColor * (1. + uGlow);
-    #else
-      vec3 col = texture2D(map, vUv).rgb;
-      vec3 n = normalize(gl_FrontFacing ? vN : -vN);
-      // two-tone cel shade from a key light over the camera's shoulder
-      float lit = smoothstep(-.05, .12, dot(n, normalize(vec3(.35, .75, .6))));
-      col *= mix(vec3(.74, .7, .86), vec3(1.), lit);
-      float grey = dot(col, vec3(.3, .6, .1)); col = mix(col, vec3(grey), uGrey) * uTint;
-      float fr = pow(1. - clamp(dot(n, vV), 0., 1.), 2.6);
-      col += uRim * fr * uRimPow * smoothstep(-.2, .5, n.y + .35);
-    #endif
+    vec3 col = c.rgb;
+    // the relief's own slope, in view space, lights the edges of each form
+    float dx = texture2D(relief, vUv + vec2(uTexel.x, 0.)).r - texture2D(relief, vUv - vec2(uTexel.x, 0.)).r;
+    float dy = texture2D(relief, vUv + vec2(0., uTexel.y)).r - texture2D(relief, vUv - vec2(0., uTexel.y)).r;
+    vec3 n = normalize(vec3(-dx * uDepth / (2. * uTexel.x * uAspect), -dy * uDepth / (2. * uTexel.y), 1.));
+    n = normalize(vNM * (gl_FrontFacing ? n : -n));
+    float lit = smoothstep(-.35, .25, dot(n, normalize(vec3(.3, .8, .5))));
+    col *= mix(vec3(.86, .83, .93), vec3(1.), lit);
+    float grey = dot(col, vec3(.3, .6, .1)); col = mix(col, vec3(grey), uGrey) * uTint;
+    float fr = pow(1. - clamp(dot(n, vV), 0., 1.), 2.2), silhouette = 1. - smoothstep(.35, .95, c.a);
+    col += uRim * (fr * .8 + silhouette * .25) * uRimPow * smoothstep(-.3, .5, n.y + .35);
     col = mix(col, vec3(1.6), uFlash);
     if (uDissolve > 0.) col += uAsh * 3. * (1. - smoothstep(0., .07, edge));
     gl_FragColor = vec4(col, 1.);
     #include <colorspace_fragment>
   }`;
 
-const gltf = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
-const cache = new Map();
-// ?flat=all or ?flat=cat,queen keeps the named figures as their illustrations, to compare the two side by side.
+const loader = new T.TextureLoader(), cache = new Map();
+// ?flat=all or ?flat=cat,queen keeps the named figures as plain cards, to compare the two side by side.
 const FLAT = new Set((new URLSearchParams(globalThis.location?.search || '').get('flat') || '').split(','));
-const fetchModel = (name) => {
-  if (!cache.has(name)) cache.set(name, gltf.loadAsync(`./models/${name}.glb`).then((g) => {
-    let mesh = null; g.scene.traverse((o) => { if (o.isMesh && !mesh) mesh = o; });
-    // The files are quantised; bake the node transform back into plain floats so the shader sees unit-height figures.
-    g.scene.updateMatrixWorld(true);
-    const geometry = mesh.geometry, q = geometry.attributes.position, pos = new Float32Array(q.count * 3), v = new T.Vector3();
-    for (let i = 0; i < q.count; i++) v.fromBufferAttribute(q, i).applyMatrix4(mesh.matrixWorld).toArray(pos, i * 3);
-    geometry.setAttribute('position', new T.BufferAttribute(pos, 3));
-    const map = mesh.material.map; map.anisotropy = 4;
-    return { geometry, map };
-  }));
+const fetchRelief = (name) => {
+  if (!cache.has(name)) cache.set(name, loader.loadAsync(`./models/${name}.png`).then((t) => { t.colorSpace = T.NoColorSpace; t.generateMipmaps = false; t.minFilter = T.LinearFilter; return t; }));
   return cache.get(name);
 };
-export const preload = (names) => Promise.all(names.map((n) => fetchModel(n).catch(() => null)));
+export const preload = (names) => Promise.all(names.map((n) => fetchRelief(n).catch(() => null)));
+// One sheet for every figure: its vertices are placed by the shader from the uv alone.
+const SHEET = new T.PlaneGeometry(1, 1, 56, 96); SHEET.translate(0, .5, 0);
 
 export function createCharacters({ world, shadow, placeholder, through }) {
   const live = new Set();
@@ -117,25 +93,24 @@ export function createCharacters({ world, shadow, placeholder, through }) {
     const shade = shadow(face); shade.position.y = .004;
     rig.add(stand); inner.add(rig, shade); if (face) inner.rotation.z = Math.PI; g.add(inner); world.add(g);
     const u = {
-      map: { value: null }, uTime: { value: 0 }, uPhase: { value: Math.random() * 6.283 }, uSquash: { value: 0 }, uTwist: { value: 0 }, uBreath: { value: 1 },
-      uLag: { value: new T.Vector3() }, uLean: { value: new T.Vector2() }, uInk: { value: .0022 },
-      uRim: { value: new T.Color(look.rim) }, uRimPow: { value: look.rimPow }, uInkColor: { value: new T.Color(look.ink) }, uGlow: { value: look.glow },
+      map: { value: stand.material.map }, relief: { value: null }, uTexel: { value: new T.Vector2() }, uDepth: { value: cast.depth * .8 }, uAspect: { value: cast.aspect },
+      uTime: { value: 0 }, uPhase: { value: Math.random() * 6.283 }, uSquash: { value: 0 }, uTwist: { value: 0 }, uBreath: { value: 1 },
+      uLag: { value: new T.Vector3() }, uLean: { value: new T.Vector2() }, uRim: { value: new T.Color(look.rim) }, uRimPow: { value: look.rimPow },
       uTint: { value: new T.Color('#ffffff') }, uAsh: { value: new T.Color(look.ash) }, uFlash: { value: 0 }, uDissolve: { value: 0 }, uGrey: { value: 0 },
     };
     // `pose` is what the stage animates; `update` turns it into bones-free acting every frame.
     const pose = { lift: 0, squash: 0, twist: 0, lean: new T.Vector2(), yaw: 0, fall: 0, flash: 0, dissolve: 0, grey: 0, still: false, spin: 0 };
-    const c = { g, inner, rig, stand, shade, here: stand.material, far: null, body: null, ink: null, u, pose, face, name, h: cast.h, model: null, lag: new T.Vector3(), vel: new T.Vector3(), last: null, gone: false, near: true };
+    const c = { g, inner, rig, stand, shade, here: stand.material, far: null, body: null, u, pose, face, name, h: cast.h, model: null, lag: new T.Vector3(), vel: new T.Vector3(), last: null, gone: false, near: true };
     g.userData = { inner, h: cast.h, pose, face, char: c };
     live.add(c);
     if (FLAT.has(name) || FLAT.has('all')) return g;
-    fetchModel(name).then(({ geometry, map }) => {
+    fetchRelief(name).then((relief) => {
       if (c.gone) return;
-      u.map.value = map;
-      const body = new T.Mesh(geometry, new T.ShaderMaterial({ uniforms: u, vertexShader: VERT, fragmentShader: FRAG, side: T.DoubleSide }));
-      const ink = new T.Mesh(geometry, new T.ShaderMaterial({ uniforms: u, vertexShader: VERT, fragmentShader: FRAG, side: T.BackSide, defines: { INK: 1 } }));
-      body.frustumCulled = ink.frustumCulled = false; ink.userData.ink = true;
-      const model = new T.Group(); model.add(body, ink); model.scale.setScalar(cast.h);
-      rig.remove(stand); c.here.dispose(); c.far?.dispose(); rig.add(model); Object.assign(c, { model, stand: null, body, ink, here: body.material, far: null }); setNear(g, c.near);
+      u.relief.value = relief; u.uTexel.value.set(1 / relief.image.width, 1 / relief.image.height);
+      const body = new T.Mesh(SHEET, new T.ShaderMaterial({ uniforms: u, vertexShader: VERT, fragmentShader: FRAG, side: T.DoubleSide }));
+      body.frustumCulled = false;
+      const model = new T.Group(); model.add(body); model.scale.setScalar(cast.h); model.position.y = -.03; model.rotation.x = -.16;
+      rig.remove(stand); c.here.dispose(); c.far?.dispose(); rig.add(model); Object.assign(c, { model, stand: null, body, here: body.material, far: null }); setNear(g, c.near);
     }).catch(() => {});
     return g;
   }
@@ -143,9 +118,8 @@ export function createCharacters({ world, shadow, placeholder, through }) {
   // Figures of the far world are drawn over the glass with its see-through material; their ground shadow is hidden.
   function setNear(g, near) {
     const c = g.userData.char, body = c.stand || c.body; c.near = near; c.shade.visible = near;
-    if (!near && !c.far) { c.far = through(body.material.map || c.u.map.value); c.far.uniforms.tint.value.copy(c.u.uTint.value); if (c.body) { c.far.side = T.FrontSide; c.far.depthWrite = true; } }
-    body.material = near ? c.here : c.far; body.renderOrder = near ? 0 : -2.5;
-    if (c.ink) c.ink.visible = near;
+    if (!near && !c.far) { c.far = through(body.material.map || c.u.map.value); c.far.uniforms.tint.value.copy(c.u.uTint.value); }
+    body.material = near ? c.here : c.far; if (c.body) body.scale.x = near ? 1 : CAST[c.name].aspect; body.renderOrder = near ? 0 : -2.5;
   }
   function remove(g) { const c = g.userData.char; if (!c) return; c.gone = true; live.delete(c); world.remove(g); c.g.traverse((o) => { if (o.material) o.material.dispose(); }); c.here.dispose(); c.far?.dispose(); }
 
