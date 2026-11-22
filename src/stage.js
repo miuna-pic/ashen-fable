@@ -189,12 +189,16 @@ export function createStage(canvas) {
   }
   addEventListener('resize', resize); resize();
   if (import.meta.env.DEV) window.__cam = CAM;
+  // The camera leans a little toward the pointer, so the near towers slide across the far sky.
+  const lean = { x: 0, y: 0, tx: 0, ty: 0 };
+  addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse') { lean.tx = e.clientX / innerWidth * 2 - 1; lean.ty = e.clientY / innerHeight * 2 - 1; } });
   const m4 = new T.Object3D(); let last = performance.now();
   function frame(now) {
     const dt = Math.min(.05, (now - last) / 1000); last = now; const t = now / 1000;
     for (const tw of [...tweens]) { const k = Math.min(1, (now - tw.t0) / tw.ms); tw.fn(tw.curve(k)); if (k >= 1) { tweens.delete(tw); tw.done(); } }
     const c = portrait ? TALL : CAM, d = (camera.userData.base || 13) + (camera.userData.dolly || 0);
-    pose(c, d, Math.sin(t * .13) * .3);
+    lean.x += (lean.tx - lean.x) * Math.min(1, dt * 3); lean.y += (lean.ty - lean.y) * Math.min(1, dt * 3);
+    pose(c, d, Math.sin(t * .13) * .5 + lean.x * 1.4); camera.position.y -= lean.y * .5; camera.lookAt(0, c.ly - lift, c.lz);
     scenery.update(t, dt); vfx.update(dt, canvas.clientHeight);
     const pulse = .5 + .5 * Math.sin(t * 4);
     tiles.forEach((pair) => pair.forEach((f) => { if (f.goal.visible) f.goal.material.opacity = .6 + .4 * pulse; }));
