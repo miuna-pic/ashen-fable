@@ -74,6 +74,27 @@ function clock() {
   const m = cue.meta, beat = 60 / m.bpm, pos = ((ctx.currentTime - cue.at) % m.len + m.len) % m.len, grid = beat / 4;
   return { bar: Math.floor(pos / (beat * (m.beats || 3))) % m.chords[0].length, wait: (grid - (pos % grid)) % grid };
 }
+/** The file a spoken line lives in: FNV-1a of speaker and text, so editing a line silences it until it is recorded again. */
+export function voiceKey(who, text) {
+  let h = 0x811c9dc5;
+  for (const b of new TextEncoder().encode(who + '|' + text.replace(/^〔[^〕]*〕/, ''))) h = Math.imul(h ^ b, 0x01000193) >>> 0;
+  return h.toString(16).padStart(8, '0');
+}
+let lines = null, speaking = null;
+function hush(s = .08) { if (!speaking) return; const { src, g } = speaking; speaking = null; ramp(g.gain, 0, s); src.stop(ctx.currentTime + s + .02); }
+async function speak(who, text) {
+  hush(); if (!text || !ctx || ctx.state !== 'running') return;
+  const mine = ++said;
+  try {
+    lines ||= await (await fetch(BASE + 'voice/lines.json')).json();
+    const key = voiceKey(who, text); if (!lines[key]) return;
+    const buf = await get(`voice/${key}.m4a`); if (mine !== said) return;
+    const src = ctx.createBufferSource(), g = ctx.createGain(); src.buffer = buf; src.connect(g).connect(fx); src.start();
+    speaking = { src, g }; duck(.45, buf.duration, .8); src.onended = () => { if (speaking?.src === src) speaking = null; };
+  } catch { lines ||= {}; }
+}
+let said = 0;
+
 function shot(name, { rate = 1, gain = 1, when = 0, pan = 0 } = {}) {
   const buf = shots[name]; if (!buf) return;
   const src = ctx.createBufferSource(), g = ctx.createGain(); src.buffer = buf; src.playbackRate.value = rate; g.gain.value = gain;
@@ -125,6 +146,8 @@ export const audio = {
   setDanger(v) { const d = Math.max(0, Math.min(1, v)); if (d === danger) return; if (ctx && d > .6 && danger <= .6) audio.sfx('warn'); danger = d; if (ctx) mix(); },
   toggle() { muted = !muted; store?.setItem('mirror-alice-mute', muted ? '1' : '0'); if (master) ramp(master.gain, muted ? 0 : 1, .15); return muted; },
   get muted() { return muted; },
+  /** Speaks a dialogue line if it has been recorded; with no text, or a line that has no recording, stops whoever is speaking. */
+  voice(who, text) { speak(who, text); },
   sfx(name) {
     if (!ctx || ctx.state !== 'running') return;
     if (name === 'step') return footstep(false);

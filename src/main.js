@@ -56,7 +56,7 @@ function allowed() {
   if (c.flip !== undefined) return [];
   const only = c.only.map(P); return all.filter((m) => only.includes(m.to));
 }
-function say(who, text) { const c = $('#coach'); if (!text) { c.classList.remove('show'); return layout(); } c.dataset.who = who; c.querySelector('b').textContent = NAMES[who]; c.querySelector('p').textContent = text; c.classList.remove('show'); void c.offsetWidth; c.classList.add('show'); layout(); }
+function say(who, text) { const c = $('#coach'); if (!text) { audio.voice(); c.classList.remove('show'); return layout(); } c.dataset.who = who; c.querySelector('b').textContent = NAMES[who]; c.querySelector('p').textContent = text; audio.voice(who, text); c.classList.remove('show'); void c.offsetWidth; c.classList.add('show'); layout(); }
 function coach() {
   const c = coachStep(); $('#flip').classList.remove('nudge');
   if (!c) return;
@@ -97,10 +97,10 @@ function talk(lines) {
   say();
   return new Promise((done) => {
     const d = $('#dialog'); let i = -1;
-    const next = () => { if (++i >= lines.length) { d.classList.remove('show'); d.onclick = null; return done(); }
+    const next = () => { if (++i >= lines.length) { audio.voice(); d.classList.remove('show'); d.onclick = null; return done(); }
       const [who, text] = lines[i], img = d.querySelector('img'); d.dataset.who = who; d.classList.toggle('plain', !ART[who]);
       if (ART[who]) img.src = `./art/${ART[who]}.webp`; d.querySelector('em').textContent = GLYPH[who] || '';
-      d.querySelector('b').textContent = NAMES[who]; d.querySelector('b').style.display = NAMES[who] ? '' : 'none'; d.querySelector('p').textContent = text; };
+      d.querySelector('b').textContent = NAMES[who]; d.querySelector('b').style.display = NAMES[who] ? '' : 'none'; d.querySelector('p').textContent = text; audio.voice(who, text); };
     d.classList.add('show'); d.onclick = next; next();
   });
 }
