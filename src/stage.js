@@ -27,7 +27,12 @@ const GLYPH = {
   ghost: glyph((g, s) => { g.strokeStyle = '#fff'; g.lineWidth = 7; g.setLineDash([18, 14]); g.strokeRect(-s / 2 + 14, -s / 2 + 14, s - 28, s - 28); g.setLineDash([]); g.lineWidth = 8; g.beginPath(); g.moveTo(-34, -34); g.lineTo(34, 34); g.moveTo(34, -34); g.lineTo(-34, 34); g.stroke(); }),
   move: glyph((g) => { g.fillStyle = '#fff'; g.beginPath(); g.arc(0, 0, 26, 0, 7); g.fill(); g.strokeStyle = '#fff'; g.lineWidth = 5; g.beginPath(); g.arc(0, 0, 46, 0, 7); g.stroke(); }),
   take: glyph((g, s) => { g.strokeStyle = '#fff'; g.lineWidth = 14; const a = s / 2 - 14, b = 44; for (const [x, y] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { g.beginPath(); g.moveTo(x * a, y * (a - b)); g.lineTo(x * a, y * a); g.lineTo(x * (a - b), y * a); g.stroke(); } }),
-  goal: glyph((g) => { g.fillStyle = '#fff'; g.beginPath(); g.moveTo(-70, 50); g.lineTo(-84, -40); g.lineTo(-40, 0); g.lineTo(0, -66); g.lineTo(40, 0); g.lineTo(84, -40); g.lineTo(70, 50); g.closePath(); g.fill(); g.fillRect(-70, 62, 140, 16); }),
+  // the crown is the aim of every board: gold on a dark plate, so it reads on a pale tile as well as on a red one
+  goal: glyph((g, s) => {
+    const r = g.createRadialGradient(0, 0, 0, 0, 0, s / 2); r.addColorStop(0, 'rgba(38,10,48,.72)'); r.addColorStop(.7, 'rgba(38,10,48,.5)'); r.addColorStop(1, 'rgba(38,10,48,0)'); g.fillStyle = r; g.fillRect(-s / 2, -s / 2, s, s);
+    g.beginPath(); g.moveTo(-70, 50); g.lineTo(-84, -40); g.lineTo(-40, 0); g.lineTo(0, -66); g.lineTo(40, 0); g.lineTo(84, -40); g.lineTo(70, 50); g.closePath(); g.rect(-70, 62, 140, 16);
+    g.lineJoin = 'round'; g.lineWidth = 14; g.strokeStyle = '#2a0b2e'; g.stroke(); g.fillStyle = '#ffd774'; g.fill();
+  }),
   hint: glyph((g) => { g.strokeStyle = '#fff'; g.lineWidth = 12; for (const r of [30, 60, 90]) { g.beginPath(); g.arc(0, 0, r, 0, 7); g.stroke(); } }),
   blob: glyph((g, s) => { const r = g.createRadialGradient(0, 0, 0, 0, 0, s / 2); r.addColorStop(0, 'rgba(255,255,255,1)'); r.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = r; g.fillRect(-s / 2, -s / 2, s, s); }),
   card: glyph((g, s) => { g.fillStyle = '#fff'; g.beginPath(); g.roundRect(-s * .32, -s * .46, s * .64, s * .92, 18); g.fill(); g.fillStyle = '#c0102c'; heart(g, 50); g.fill(); g.save(); g.translate(-s * .22, -s * .34); heart(g, 14); g.fill(); g.restore(); }),
@@ -120,7 +125,7 @@ export function createStage(canvas) {
       g.position.copy(local(c)); corpses.push(g);
     }
     scenery.setBoard(st); order(flipped);
-    tiles.forEach((pair, s) => pair.forEach((f) => { f.goal.visible = s === st.goal; f.goal.material.map = GLYPH.goal; f.goal.material.color.set('#ffd774'); f.goal.material.opacity = .95; }));
+    tiles.forEach((pair, s) => pair.forEach((f) => { f.goal.visible = s === st.goal; f.goal.material.map = GLYPH.goal; f.goal.material.blending = T.NormalBlending; f.goal.material.opacity = 1; }));
   }
   // Threats of the facing world are filled; threats from the far side show as dashed ghosts.
   function paint(st, face, moves, aims, hint) {
@@ -301,7 +306,7 @@ export function createStage(canvas) {
     if (cur.visible) { ring.scale.setScalar(1.08 + Math.sin(t * 9) * .05); beam.material.opacity = .35 + .15 * Math.sin(t * 9); }
     scenery.update(t, dt); vfx.update(dt, canvas.clientHeight);
     const pulse = .5 + .5 * Math.sin(t * 4);
-    tiles.forEach((pair) => pair.forEach((f) => { if (f.goal.visible) f.goal.material.opacity = .6 + .4 * pulse; }));
+    tiles.forEach((pair) => pair.forEach((f) => { if (f.goal.visible) f.goal.material.opacity = .8 + .2 * pulse; }));
     for (const g of pieces.values()) g.userData.body.position.y = g.userData.h / 2 - .03 + Math.sin(t * 1.6 + g.position.x * 2 + g.position.z) * .018;
     // the grade follows the glass as it turns, at any frame rate
     final.uniforms.time.value = t; final.uniforms.punch.value = fx.punch; final.uniforms.hurt.value = fx.hurt; final.uniforms.flash.value = fx.flash;

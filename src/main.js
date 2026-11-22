@@ -128,6 +128,7 @@ async function flip() {
 async function move(to) {
   if (!allowed().some((m) => m.to === to)) return;
   const st0 = st, r = playX(st, face, to), c = coachStep(); locked = true; hint = null; moves++;
+  if (!c) say();   // a line about the last death or the last lesson is over once she moves again
   stage.paint(st, face, [], shownAims(st), null);
   await stage.animate(r.ev, { sfx: audio.sfx, cutin });
   st = r.st;
@@ -224,7 +225,9 @@ canvas.addEventListener('pointerdown', (e) => {
   if (!e.isPrimary) return drop(); if (e.pointerType === 'mouse' && e.button) return;
   held = e.pointerId; try { canvas.setPointerCapture(e.pointerId); } catch {} show(e);
 });
-canvas.addEventListener('pointermove', (e) => { if (e.pointerId === held) show(e); });
+// a mouse shows the square it is over before the button goes down
+canvas.addEventListener('pointermove', (e) => { if (e.pointerId === held || (held === null && e.pointerType === 'mouse')) show(e); });
+canvas.addEventListener('pointerleave', (e) => { if (held === null && e.pointerType === 'mouse') stage.cursor(-1); });
 canvas.addEventListener('pointerup', (e) => { if (e.pointerId !== held) return; const s = show(e); drop(); if (s >= 0) tap(s); });
 canvas.addEventListener('pointercancel', drop);
 // A finger that lands anywhere else (a HUD button, a second finger) calls the move off.
