@@ -26,11 +26,11 @@ const POSE = /* glsl */`
     rest = p;
     // breathing and a slow weight shift
     float chest = smoothstep(.25, .6, y) * (1. - smoothstep(.6, .8, y));
-    p.x *= 1. + chest * .02 * sin(uTime * 1.9 + uPhase) * uBreath;
-    p.x += sin(uTime * 1.05 + uPhase) * .012 * y * y * uBreath;
-    p.y += sin(uTime * 1.9 + uPhase) * .006 * smoothstep(.3, 1., y) * uBreath;
+    p.x *= 1. + chest * .045 * sin(uTime * 1.9 + uPhase) * uBreath;
+    p.x += sin(uTime * 1.05 + uPhase) * .022 * y * y * uBreath;
+    p.y += sin(uTime * 1.9 + uPhase) * .014 * smoothstep(.3, 1., y) * uBreath;
     // hair, skirts and ribbons: wind plus inertia, so they trail the body and overshoot when it stops
-    vec3 wind = vec3(sin(uTime * 2.3 + y * 7. + uPhase), 0., cos(uTime * 1.7 + y * 5. + uPhase * 1.3)) * .014;
+    vec3 wind = vec3(sin(uTime * 2.3 + y * 7. + uPhase), 0., cos(uTime * 1.7 + y * 5. + uPhase * 1.3)) * .034;
     p += (wind * uBreath + uLag * (.35 + y * .9)) * w;
     p.y -= length(uLag.xz) * w * .25;
     // whole-body acting
@@ -148,7 +148,8 @@ export function createCharacters({ world, shadow, placeholder, through }) {
       u.uFlash.value = pose.flash; u.uDissolve.value = pose.dissolve; u.uGrey.value = pose.grey; u.uBreath.value = pose.still ? 0 : 1;
       // lift is away from the glass: up in Wonderland, down beneath it
       c.inner.position.y = pose.lift * (c.face ? -1 : 1);
-      c.rig.rotation.set(-pose.fall * 1.45, pose.yaw + pose.spin, 0); c.rig.position.set(0, pose.fall * .16, pose.fall * .3);
+      // a relief has no back: a spin is a swing from side to side, never edge-on
+      c.rig.rotation.set(-pose.fall * 1.45, pose.yaw + Math.sin(pose.spin) * .7, 0); c.rig.position.set(0, pose.fall * .16, pose.fall * .3);
       if (c.stand) c.stand.position.y = c.h / 2 - .03 + Math.sin(t * 1.6 + u.uPhase.value) * .018;
       c.shade.scale.setScalar(.95 * (1 - Math.min(.5, pose.lift * .5)) * (1 - pose.dissolve));
     }
