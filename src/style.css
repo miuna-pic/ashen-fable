@@ -114,6 +114,7 @@ body.mirror #cutin { background: #0a0508; border-color: var(--blood); }
   #dialog > div { width: clamp(150px, calc(var(--gap, 28vw) - 24px), 320px); padding: 16px 14px 26px; margin-bottom: max(10px, env(safe-area-inset-bottom)); border-top-width: 4px; box-shadow: 6px 6px 0 var(--ink); }
   #dialog[data-who=b] > div, #dialog[data-who=shadow] > div, #dialog[data-who=queen] > div { box-shadow: 6px 6px 0 var(--blood); }
   #dialog p { font-size: 14px; line-height: 1.55; min-height: 3.1em; }
+  #dialog[data-who=n] { justify-content: center; align-items: center; } #dialog[data-who=n] > div { width: min(880px, 72vw); }   /* narration darkens the whole screen: it keeps the middle */
   #dialog b { top: -16px; left: 10px; font-size: 13px; padding: 2px 12px; } #dialog div i { right: 10px; bottom: 6px; font-size: 10px; }
   #dialog img { left: 0; height: 84vh; max-width: var(--gap, 28vw); object-fit: contain; object-position: center bottom; } #dialog[data-who=b] img, #dialog[data-who=shadow] img { right: 0; }
   #banner::before { height: 20vh; } #banner b { font-size: 11vh; }
