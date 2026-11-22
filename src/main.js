@@ -16,7 +16,7 @@ app.innerHTML = `
 <div id="toast"></div>
 <footer class="hud bottom">
   <div class="ink"><span>墨</span><div id="ink"></div><small id="lead"></small></div>
-  <button id="flip"><b>翻面</b><i>FLIP · 空格</i></button>
+  <button id="flip"><b>翻面</b><i>FLIP<span class="key"> · 空格</span></i></button>
   <div class="tools"><button id="hint">白兔</button><button id="retry">重来</button><button id="clean">清尸</button><button id="mute">声</button></div>
 </footer>
 <div id="banner"><b></b><i></i></div>

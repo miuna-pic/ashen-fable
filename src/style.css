@@ -76,6 +76,7 @@ body.mirror #cutin { background: #0a0508; border-color: var(--blood); }
 #title small { position: absolute; left: clamp(18px, 5vw, 90px); bottom: 24px; font-size: 11px; letter-spacing: .4em; opacity: .7; }
 /* Touch: every control is at least a 44px target, and nothing reacts to a hover that a finger cannot make. */
 @media (pointer: coarse) {
+  #flip .key { display: none; }
   .tools { gap: 8px; } .tools button { min-width: 46px; min-height: 44px; padding: 8px 12px; font-size: max(13px, 1.1vw); }
   #flip i { letter-spacing: .3em; }
   #flip { min-height: 56px; }
@@ -85,7 +86,8 @@ body.mirror #cutin { background: #0a0508; border-color: var(--blood); }
   .hud { padding-inline: max(14px, env(safe-area-inset-left)) max(14px, env(safe-area-inset-right)); }
   .chapter h2 { font-size: clamp(32px, 9.5vw, 92px); } .chapter > i { margin-top: clamp(8px, 2vw, 24px); }
   .count b { font-size: clamp(30px, 8vw, 76px); }
-  .chapter > i { max-width: 46vw; letter-spacing: .2em; line-height: 1.5; }
+  .chapter > i { max-width: calc(100vw - 272px); letter-spacing: .2em; line-height: 1.5; }
+  @media (max-width: 379px) { .chapter > i { display: none; } }
   .bottom { justify-content: flex-start; align-items: center; min-height: 60px; }
   .ink { max-width: 30vw; gap: 8px; } .ink small { display: none; } .ink span { font-size: clamp(26px, 7vw, 50px); } #ink { gap: 6px; } #ink i { width: clamp(13px, 3.4vw, 24px); }
   .tools { position: fixed; right: max(14px, env(safe-area-inset-right)); top: calc(max(14px, env(safe-area-inset-top)) + clamp(58px, 17vw, 130px)); }
