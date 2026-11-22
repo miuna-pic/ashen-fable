@@ -35,7 +35,7 @@ body.mirror #flip { background: var(--paper); color: var(--ink); border-color: v
 .tools { display: flex; gap: 6px; }
 .tools button { font-weight: 900; font-size: clamp(12px, 1.1vw, 15px); letter-spacing: .12em; padding: 8px 10px; background: var(--bg); border: 1.5px solid var(--fg); backdrop-filter: blur(6px); }
 .tools button.off { opacity: .4; text-decoration: line-through; }
-#toast { position: fixed; left: 50%; bottom: clamp(96px, 15vh, 150px); transform: translateX(-50%); max-width: 90vw; padding: 8px 16px; background: var(--ink); color: var(--paper); font-weight: 500; font-size: clamp(12px, 1.2vw, 16px); letter-spacing: .06em; border-left: 6px solid var(--blood); opacity: 0; pointer-events: none; z-index: 3; text-align: center; }
+#toast { position: fixed; left: 50%; bottom: var(--toast, clamp(96px, 15vh, 150px)); width: max-content; transform: translateX(-50%); max-width: 90vw; padding: 8px 16px; background: var(--ink); color: var(--paper); font-weight: 500; font-size: clamp(12px, 1.2vw, 16px); letter-spacing: .06em; border-left: 6px solid var(--blood); opacity: 0; pointer-events: none; z-index: 3; text-align: center; }
 #toast.show { animation: toast 3.2s forwards; }
 @keyframes toast { 0% { opacity: 0; translate: 0 10px; } 8%, 85% { opacity: 1; translate: 0 0; } 100% { opacity: 0; } }
 #banner { position: fixed; inset: 0; display: grid; place-content: center; text-align: center; pointer-events: none; opacity: 0; z-index: 5; color: #fff; }
@@ -74,10 +74,39 @@ body.mirror #cutin { background: #0a0508; border-color: var(--blood); }
 #begin { position: absolute; left: clamp(18px, 5vw, 90px); bottom: clamp(64px, 12vh, 120px); padding: 12px 54px; background: #fff; color: var(--ink); font-weight: 900; font-size: clamp(22px, 2.6vw, 38px); letter-spacing: .3em; transform: skewX(-12deg); box-shadow: 9px 9px 0 var(--blood); animation: pulse 1.8s infinite; }
 @keyframes pulse { 50% { box-shadow: 9px 9px 0 var(--blood), 0 0 0 12px rgba(255,255,255,.18); } }
 #title small { position: absolute; left: clamp(18px, 5vw, 90px); bottom: 24px; font-size: 11px; letter-spacing: .4em; opacity: .7; }
+/* Touch: every control is at least a 44px target, and nothing reacts to a hover that a finger cannot make. */
+@media (pointer: coarse) {
+  .tools { gap: 8px; } .tools button { min-width: 46px; min-height: 44px; padding: 8px 12px; font-size: max(13px, 1.1vw); }
+  #flip i { letter-spacing: .3em; }
+  #flip { min-height: 56px; }
+}
+/* Portrait phone and tablet: title above, the board in the middle, and one thumb row below with the flip on top of it. */
 @media (max-aspect-ratio: 4/5) {
-  .ink { max-width: 46vw; } .ink small { display: none; }
-  .bottom { flex-wrap: wrap; } #flip { bottom: calc(max(16px, env(safe-area-inset-bottom)) + 52px); }
-  .tools button { padding: 7px 8px; }
+  .hud { padding-inline: max(14px, env(safe-area-inset-left)) max(14px, env(safe-area-inset-right)); }
+  .chapter h2 { font-size: clamp(32px, 9.5vw, 92px); } .chapter > i { margin-top: clamp(8px, 2vw, 24px); }
+  .count b { font-size: clamp(30px, 8vw, 76px); }
+  .chapter > i { max-width: 46vw; overflow: hidden; white-space: nowrap; text-overflow: clip; }
+  .bottom { justify-content: flex-start; align-items: center; min-height: 60px; }
+  .ink { max-width: 30vw; gap: 8px; } .ink small { display: none; } .ink span { font-size: clamp(26px, 7vw, 50px); } #ink { gap: 6px; } #ink i { width: clamp(13px, 3.4vw, 24px); }
+  .tools { position: fixed; right: max(14px, env(safe-area-inset-right)); top: calc(max(14px, env(safe-area-inset-top)) + clamp(58px, 17vw, 130px)); }
+  #flip { bottom: max(14px, env(safe-area-inset-bottom)); padding: 6px clamp(28px, 9vw, 90px); }
+  #flip b { font-size: clamp(26px, 6.4vw, 44px); }
   #dialog img { height: 62vh; left: -8vw; } #dialog[data-who=b] img, #dialog[data-who=shadow] img { right: -8vw; }
   #title .art { background-position: 78% 50%; } #title .en { display: none; }
+}
+/* Landscape phone: there is no height to spare, so the HUD moves into the two side columns and the flip sits under the right thumb. */
+@media (orientation: landscape) and (max-height: 540px) {
+  .hud { padding: max(10px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left)); }
+  .chapter h2 { font-size: clamp(26px, 4.4vw, 40px); } .chapter > i { display: none; }
+  .count b { font-size: clamp(26px, 4vw, 38px); }
+  .bottom { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+  .ink { flex-direction: row; max-width: 30vw; } .ink small { display: none; } .ink span { font-size: 26px; }
+  .tools { position: fixed; left: max(14px, env(safe-area-inset-left)); top: calc(max(10px, env(safe-area-inset-top)) + clamp(64px, 20vh, 96px)); display: grid; grid-template-columns: repeat(2, auto); }
+  #flip { left: auto; right: max(16px, env(safe-area-inset-right)); bottom: max(14px, env(safe-area-inset-bottom)); transform: skewX(-12deg); padding: 8px 26px; box-shadow: 6px 6px 0 var(--blood); }
+  #flip:active { transform: skewX(-12deg) translate(4px, 4px); }
+  #flip b { font-size: 26px; }
+  #dialog > div { padding: 22px 20px 26px; margin-bottom: max(12px, env(safe-area-inset-bottom)); width: min(880px, 76vw); } #dialog p { font-size: 15px; line-height: 1.6; min-height: 3.2em; }
+  #dialog img { height: 96vh; }
+  #banner::before { height: 46vh; } #banner b { font-size: 26vh; }
+  #title h1 { font-size: clamp(48px, 19vh, 130px); top: 7vh; } #title .tag { bottom: 31vh; font-size: 13px; line-height: 1.7; } #begin { bottom: 13vh; font-size: 20px; padding: 9px 42px; } #title small { bottom: 10px; }
 }
