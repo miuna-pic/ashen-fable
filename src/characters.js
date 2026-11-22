@@ -101,7 +101,8 @@ export function createCharacters({ world, shadow, placeholder, through }) {
     const cast = CAST[name], look = WORLD[face], g = new T.Group(), inner = new T.Group(), rig = new T.Group();
     const stand = placeholder(name, cast.h, cast.aspect);
     const shade = shadow(face); shade.position.y = .004;
-    rig.add(stand); inner.add(rig, shade); if (face) inner.rotation.z = Math.PI; g.add(inner); world.add(g);
+    const tilt = new T.Group(); tilt.add(rig);   // the stage leans the figure toward a steep camera
+    rig.add(stand); inner.add(tilt, shade); if (face) inner.rotation.z = Math.PI; g.add(inner); world.add(g);
     const u = {
       map: { value: stand.material.map }, relief: { value: null }, uTexel: { value: new T.Vector2() }, uDepth: { value: cast.depth * .8 }, uAspect: { value: cast.aspect },
       uTime: { value: 0 }, uPhase: { value: Math.random() * 6.283 }, uSquash: { value: 0 }, uTwist: { value: 0 }, uBreath: { value: 1 },
@@ -111,7 +112,7 @@ export function createCharacters({ world, shadow, placeholder, through }) {
     // `pose` is what the stage animates; `update` turns it into bones-free acting every frame.
     const pose = { lift: 0, squash: 0, twist: 0, lean: new T.Vector2(), yaw: 0, fall: 0, flash: 0, dissolve: 0, grey: 0, still: false, spin: 0 };
     const c = { g, inner, rig, stand, shade, here: stand.material, far: null, body: null, u, pose, face, name, h: cast.h, model: null, lag: new T.Vector3(), vel: new T.Vector3(), last: null, gone: false, near: true };
-    g.userData = { inner, h: cast.h, pose, face, char: c };
+    g.userData = { inner, tilt, h: cast.h, pose, face, char: c };
     live.add(c);
     if (FLAT.has(name) || FLAT.has('all')) return g;
     fetchRelief(name).then((relief) => {

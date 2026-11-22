@@ -43,6 +43,7 @@ const VERT = /* glsl */`
 const shader = (fragmentShader, uniforms = {}, extra = {}) => new T.ShaderMaterial({ uniforms: { ...U, ...uniforms }, vertexShader: VERT, fragmentShader: ENV + fragmentShader, toneMapped: false, ...extra });
 
 const R = 26;
+export const BACKDROP = 1;
 export function createScenery(world) {
   U.skyA.value = paint('sky_a'); U.skyB.value = paint('sky_b');
   const out = {};
@@ -57,7 +58,9 @@ export function createScenery(world) {
         c = mix(c, mix(vec3(1., .96, .95), vec3(.42, .02, .05), m), exp(-e * 110.) * mix(.55, .6, m));
         gl_FragColor = vec4(c, 1.); }`,
   }));
-  sky.renderOrder = -10; world.add(sky);
+  // The sky and the sea are the costly pixels and the soft ones: they live on their own layer so the stage can
+  // draw them into a smaller buffer than the board and the pieces (see stage.js, backdrop).
+  sky.renderOrder = -10; sky.layers.set(BACKDROP); world.add(sky);
 
   // Sea: a still mirror that reflects its own sky, with a hole where the board sits.
   const SEA = /* glsl */`varying vec3 wp, wn; uniform float side;
@@ -97,7 +100,11 @@ export function createScenery(world) {
     }`;
   for (const side of [1, -1]) {
     const sea = new T.Mesh(new T.CircleGeometry(R * 1.003, 128), shader(SEA, { side: { value: side } }));
-    sea.rotation.x = -side * Math.PI / 2; sea.renderOrder = -9; world.add(sea);
+    sea.rotation.x = -side * Math.PI / 2; sea.renderOrder = -9; sea.layers.set(BACKDROP); world.add(sea);
+    // the water still has to hide what hangs in the other world, so it leaves its depth in the main pass
+    const mask = new T.Mesh(sea.geometry, new T.ShaderMaterial({ colorWrite: false, vertexShader: 'varying vec2 q; void main(){ q = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }',
+      fragmentShader: `varying vec2 q; void main(){ if (abs(q.x) < ${(W / 2 + .12).toFixed(2)} && abs(q.y) < ${(H / 2 + .12).toFixed(2)}) discard; gl_FragColor = vec4(0.); }` }));
+    mask.rotation.copy(sea.rotation); mask.renderOrder = -9; world.add(mask);
   }
 
   // Board glass: one sheet per face. You see the other world, and whoever hangs in it, through the tiles.
@@ -116,9 +123,22 @@ export function createScenery(world) {
         vec2 d = abs(f - o) - .5; float sd = length(max(d, 0.)) + min(max(d.x, d.y), 0.);
         hole = max(hole, -sd);
       }
-      float inside = hole + (noise(g * 9.) - .5) * .09 + (noise(g * 23.) - .5) * .04;
-      if (inside > 0.) { if (side > 0.) discard; gl_FragColor = vec4(.012, .0, .006, .93); return; }   // from below, the daylight in a hole is dimmed
-      float rimHole = smoothstep(-.13, 0., inside);
+      // the break is cut in straight shards, not eaten away: two crossed sawtooths give it facets
+      float zig = abs(fract((g.x + g.y) * 2.5 + .2) - .5) + abs(fract((g.x - g.y) * 1.7 + .6) - .5);
+      float inside = hole + (zig - .5) * .11 - .02;
+      if (inside > 0.) {
+        // a well into the other world: the cut face of the glass, then the far sky pooling below
+        float aw = fwidth(inside), face = 1. - smoothstep(.045, .045 + aw, inside), lip = 1. - smoothstep(.0, aw * 1.5, inside - .045);
+        float depth = smoothstep(.05, .5, inside), swirl = noise(g * 3. + vec2(time * .12, -time * .07));
+        vec3 cutA = mix(vec3(.62, .80, 1.), vec3(.20, .30, .72), smoothstep(0., .045, inside));        // surface: pale blue glass edge
+        vec3 cutB = mix(vec3(1., .30, .34), vec3(.30, .02, .07), smoothstep(0., .045, inside));        // mirror: ember edge
+        vec3 wellA = mix(vec3(.16, .05, .22), vec3(.05, .0, .04), depth) + vec3(.55, .04, .12) * swirl * depth * .5;   // looking down: dusk, then the red of the mirror
+        vec3 wellB = mix(vec3(.50, .56, .92), vec3(.96, .90, .98), depth) * (.75 + .25 * swirl);                        // looking up: daylight
+        vec3 well = side > 0. ? wellA : wellB, cutc = side > 0. ? cutA : cutB;
+        vec3 colh = mix(well, cutc, face) + (side > 0. ? vec3(.5, .6, 1.) : vec3(1., .25, .3)) * lip * .35;
+        gl_FragColor = vec4(colh, 1.); return;
+      }
+      float rimHole = smoothstep(-.035, 0., inside);
 
       float edge = max(abs(f.x), abs(f.y)), aa = fwidth(g.x) + fwidth(g.y);
       float line = smoothstep(.5 - .018 - aa, .5 - .018, edge);
@@ -138,14 +158,14 @@ export function createScenery(world) {
         col = mix(base, sky, .16 + .5 * fr); a = mix(.90, .84, chk);
         col = mix(col, vec3(.99, .80, .42), max(max(line, stud), inlay * .7));
         a = mix(a, 1., max(line, stud));
-        col += vec3(1., .86, .5) * rimHole * .9;
+        col = mix(col, vec3(.99, .82, .45), rimHole);   // a gilt lip where the glass broke
       } else {
         vec3 base = mix(vec3(.20, .012, .035), vec3(.028, .014, .03), chk);
         base = mix(base, base * 1.5 + vec3(.05, 0., .01), vein * .5);
         col = mix(base, sky * 1.2, .08 + .5 * fr); a = mix(.95, .90, chk);
         col = mix(col, vec3(.95, .12, .18), max(line, stud) * .9 + inlay * .45);
         a = mix(a, 1., max(line, stud));
-        col += vec3(1., .2, .22) * rimHole * 1.1;
+        col = mix(col, vec3(1., .22, .24), rimHole);
       }
       col *= 1. - bevel * .10;
       float gl = step(abs(c.x - goal.x) + abs(c.y - goal.y), .1) * (1. - smoothstep(.1, .5, edge) * .6) * (.55 + .45 * sin(time * 3.));
@@ -212,25 +232,30 @@ export function createScenery(world) {
     const g = new T.ExtrudeGeometry(s, { depth, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 3, curveSegments: 6 });
     g.translate(0, 0, -depth / 2); g.rotateX(Math.PI / 2); return g;
   };
+  // Two frames: the full one, and a slim one for windows where every pixel beside the squares is spoken for.
+  const buildFrame = (o, t0, t1, fin, sc) => {
   const frame = new T.Group(); world.add(frame);
-  frame.add(new T.Mesh(ring(W / 2 + .46, H / 2 + .46, W / 2 + .1, H / 2 + .1, .1, .05, .16), metal));
-  frame.add(new T.Mesh(ring(W / 2 + .62, H / 2 + .62, W / 2 + .5, H / 2 + .5, .02, .025, .22), trim));
+  frame.add(new T.Mesh(ring(W / 2 + o, H / 2 + o, W / 2 + .1, H / 2 + .1, .1, .05, .16), metal));
+  frame.add(new T.Mesh(ring(W / 2 + t1, H / 2 + t1, W / 2 + t0, H / 2 + t0, .02, .025, .22), trim));
   const prof = [[0, 0], [.17, 0], [.19, .04], [.12, .08], [.08, .13], [.14, .19], [.15, .25], [.09, .31], [.05, .36], [.1, .42], [.1, .47], [0, .54]].map(([x, y]) => new T.Vector2(x, y));
   const finial = new T.LatheGeometry(prof, 20), thorn = new T.ConeGeometry(.13, .9, 5).translate(0, -.45, 0);
   const gemA = new T.MeshBasicMaterial({ color: '#bfe0ff', toneMapped: false }), gemB = new T.MeshBasicMaterial({ color: '#ff2038', toneMapped: false });
   const gem = new T.OctahedronGeometry(.085);
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-    const x = sx * (W / 2 + .3), z = sz * (H / 2 + .3);
-    const a = new T.Mesh(finial, trim); a.position.set(x, .09, z); frame.add(a);
+    const x = sx * (W / 2 + fin), z = sz * (H / 2 + fin);
+    const a = new T.Mesh(finial, trim); a.position.set(x, .09, z); a.scale.setScalar(sc); frame.add(a);
     for (let i = 0; i < 3; i++) { const b = new T.Mesh(thorn, metal); b.position.set(x + sx * i * .05, -.08, z + sz * i * .05); b.rotation.set(sz * i * .5, i * 1.3, -sx * i * .5); b.scale.setScalar(1 - i * .22); frame.add(b); }
-    const ga = new T.Mesh(gem, gemA); ga.position.set(x, .7, z); const gb = new T.Mesh(gem, gemB); gb.position.set(x, -1.02, z); frame.add(ga, gb);
+    const ga = new T.Mesh(gem, gemA); ga.position.set(x, .09 + .61 * sc, z); const gb = new T.Mesh(gem, gemB); gb.position.set(x, -1.02, z); frame.add(ga, gb);
   }
   for (let i = 0; i < W + H; i++) for (const s of [-1, 1]) {   // a stud beside every tile line
     const along = i < W, k = along ? i - W / 2 + .5 : i - W - H / 2 + .5;
     const m = new T.Mesh(gem, gemA), n = new T.Mesh(gem, gemB);
-    const x = along ? k : s * (W / 2 + .3), z = along ? s * (H / 2 + .3) : k;
+    const x = along ? k : s * (W / 2 + fin), z = along ? s * (H / 2 + fin) : k;
     m.position.set(x, .105, z); n.position.set(x, -.105, z); m.scale.set(.6, .35, .6); n.scale.set(.6, .35, .6); frame.add(m, n);
   }
+  return frame; };
+  const frames = [buildFrame(.46, .5, .62, .3, 1), buildFrame(.26, .29, .36, .18, .7)]; frames[1].visible = false;
+  out.setSlim = (on) => { frames[0].visible = !on; frames[1].visible = on; };
   out.metal = metal;
 
   // A clock the size of a moon, half sunk in the horizon: gold dust above the glass, an open wound beneath it.
@@ -272,11 +297,61 @@ export function createScenery(world) {
   const eg = new T.BufferGeometry(); eg.setAttribute('position', new T.BufferAttribute(epos, 3));
   const embers = new T.Points(eg, new T.PointsMaterial({ color: '#ff3a2a', size: .09, map: blob, transparent: true, depthWrite: false, blending: T.AdditiveBlending, toneMapped: false })); embers.frustumCulled = false; world.add(embers);
 
+  // Middle distance: chess pieces the size of towers, standing in the sea between the board and the painted horizon,
+  // so the horizon slides behind them when the camera moves. Each is a lathe profile [height, half-width], turned and lit.
+  const PROFILES = [
+    [[0, .30], [.05, .30], [.08, .22], [.2, .15], [.52, .11], [.56, .19], [.6, .12], [.66, .17], [.78, .19], [.9, .12], [.95, .04], [1, .05]],                      // bishop
+    [[0, .34], [.06, .34], [.09, .25], [.18, .2], [.7, .17], [.73, .26], [.78, .26], [.8, .3], [1, .3]],                                                             // rook
+    [[0, .30], [.05, .30], [.09, .2], [.24, .14], [.6, .09], [.64, .2], [.68, .11], [.74, .16], [.86, .26], [.9, .12], [.93, .05], [1, .04]],                        // queen
+    [[0, .32], [.07, .32], [.11, .2], [.3, .13], [.5, .1], [.54, .2], [.58, .1], [.66, .2], [.8, .22], [.92, .16], [1, 0]],                                          // pawn
+  ];
+  const TOWER = /* glsl */`varying vec3 wp, wn; uniform vec3 base; uniform float tall, seed, haze;
+    void main(){
+      vec3 lp = inv * wp, n = normalize(inv * wn), v = normalize(lp - inv * cameraPosition);
+      float m = step(lp.y, 0.), hy = abs(lp.y) / tall, ang = atan(lp.x - base.x, lp.z - base.z);
+      bool back = dot(n, v) > 0.; if (back) n = -n;
+      // the mirror's towers are snapped off, each at its own height, along a slanted splintered line
+      float snap = .7 + seed * .24 + sin(ang + seed * 9.) * .07 + abs(fract(ang * 1.6 + seed * 5.) - .5) * .1;
+      if (m > .5 && hy > snap) discard;
+      vec3 L = normalize(vec3(-.55, mix(.5, -.5, m), .65));
+      float d = dot(n, L), key = clamp(d, 0., 1.), wrap = d * .5 + .5, fr = pow(1. - clamp(dot(-v, n), 0., 1.), 2.5);
+      float course = smoothstep(.44, .5, abs(fract(hy * 16. + seed) - .5));                                   // courses of stone
+      vec2 w = vec2(ang * 1.5915 + floor(hy * 9.) * .37 + seed * 3., hy * 9.), wf = abs(fract(w) - .5);
+      float lit = step(wf.x, .11) * step(wf.y, .27) * step(.5, hash(floor(w) + seed * 17.)) * step(.16, hy) * step(hy, .68);
+      // surface: sunlit porcelain with lilac shade and gilt courses
+      vec3 a = mix(vec3(.40, .38, .78), vec3(1., .96, .94), smoothstep(.15, .8, wrap)) + vec3(1., .9, .8) * pow(key, 12.) * .25;
+      a = mix(a, vec3(.95, .72, .36) * (.5 + .7 * key), course * .7) + vec3(.75, .8, 1.) * fr * .35;
+      a = mix(a, vec3(1., .78, .4) * 1.15, lit * .9);
+      // mirror: charred stone, a hard crimson rim, embers in the joints and the windows
+      vec3 b = mix(vec3(.022, .006, .012), vec3(.34, .03, .07), key * key) + vec3(1., .10, .16) * fr * .8;
+      float crack = smoothstep(.06, .0, abs(noise(vec2(ang * 3. + seed * 7., hy * 11.)) - .5)) * step(.2, hy);
+      b += vec3(1., .16, .1) * (course * .35 + crack * .5 * (.6 + .4 * sin(time * 1.1 + seed * 20. + hy * 9.)));
+      b = mix(b, vec3(1., .2, .22) * 1.5, lit);
+      b = mix(b, vec3(1., .35, .25) * 1.4, smoothstep(snap - .02, snap, hy));                                 // the break still glows
+      if (back) b = vec3(.5, .03, .05) * (1. - hy * .6);                                                      // looking into the hollow
+      vec3 col = mix(a, b, m);
+      col = mix(col, mix(vec3(.80, .74, .97), vec3(.30, .02, .06), m), haze * .55);                           // far ones sink into their sky
+      gl_FragColor = vec4(col, smoothstep(.0, .14, hy));                                                      // the foot is lost in sea mist
+    }`;
+  const lathes = PROFILES.map((p) => new T.LatheGeometry(p.map(([y, w]) => new T.Vector2(Math.max(w * .66, .001), y)), 20));
+  const towers = [1, -1].map((side) => {
+    const g = new T.Group();
+    for (let i = 0; i < 9; i++) {
+      const az = (i - 4) * .25 + (hash1(i + 40) - .5) * .1, r = 13 + hash1(i + 50) * 9, haze = (r - 13) / 9;
+      const h = 1.9 + hash1(i + 60) * 1.3 + haze * 1.43, girth = .85 + hash1(i + 70 + side) * .4;   // farther ones are taller, so they read at the same size and differ only in drift
+      if (i === 4) continue;   // leave the castle a clear view down the middle
+      const m = new T.Mesh(lathes[(i + (side < 0 ? 2 : 0)) % lathes.length], shader(TOWER, { base: { value: new T.Vector3() }, tall: { value: h }, seed: { value: hash1(i * 3 + side + 80) }, haze: { value: haze } }, { transparent: true, side: side < 0 ? T.DoubleSide : T.FrontSide }));
+      m.position.set(Math.sin(az) * r, 0, -Math.cos(az) * r); m.material.uniforms.base.value.copy(m.position);
+      m.scale.set(h * girth, h * side, h * girth); m.rotation.y = hash1(i + 90) * 6.28; m.renderOrder = -8 - haze; g.add(m);
+    }
+    world.add(g); return g;
+  });
+
   const m4 = new T.Object3D();
   out.update = (t, dt) => {
     U.time.value = t; world.updateMatrixWorld(); U.inv.value.setFromMatrix4(world.matrixWorld).invert();
     // drifting things belong to their own world: seen through the glass they only litter the board
-    const below = Math.cos(world.rotation.z) < 0; decks.forEach((d) => d.meshes.forEach((m) => { m.visible = (d.side < 0) === below; })); petals.visible = !below; embers.visible = below;
+    const below = Math.cos(world.rotation.z) < 0; decks.forEach((d) => d.meshes.forEach((m) => { m.visible = (d.side < 0) === below; })); petals.visible = !below; embers.visible = below; towers[0].visible = !below; towers[1].visible = below;
     for (const d of decks) { d.mine.forEach((c, i) => { const a = c.a + t * c.w * .05; m4.position.set(Math.cos(a) * c.r, d.side * (c.y + 1.2 + Math.sin(t * c.w + c.a) * .4), -7 - (.5 + .5 * Math.sin(a)) * c.r * .8); m4.rotation.set(t * c.w * .6 + c.a, t * c.w * .8, c.a); m4.scale.setScalar(c.s); m4.updateMatrix(); d.meshes.forEach((m) => m.setMatrixAt(i, m4.matrix)); }); d.meshes.forEach((m) => { m.instanceMatrix.needsUpdate = true; }); }
     pseed.forEach((p, i) => { p.y -= p.v * dt; if (p.y < .02) p.y = 11; m4.position.set(p.x + Math.sin(t * .6 + i) * .7, p.y, p.z + Math.cos(t * .4 + i * 2.) * .5); m4.rotation.set(t * p.v * 2 + i, t * p.v * 1.4, i); m4.scale.setScalar(p.s); m4.updateMatrix(); petals.setMatrixAt(i, m4.matrix); }); petals.instanceMatrix.needsUpdate = true;
     const ep = eg.attributes.position; for (let i = 0; i < E; i++) { let y = ep.getY(i) - dt * (.25 + (i % 5) * .12); if (y < -11) y = -.05; ep.setY(i, y); ep.setX(i, ep.getX(i) + Math.sin(t * .8 + i) * dt * .12); } ep.needsUpdate = true;

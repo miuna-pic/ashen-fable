@@ -4,11 +4,11 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
-import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { W, H, X, Y, KINDS } from './rules.js';
-import { createScenery } from './scenery.js';
+import { createScenery, BACKDROP } from './scenery.js';
 import { createVfx, HUE } from './vfx.js';
 import { createCharacters } from './characters.js';
+import { createQuality } from './quality.js';
 
 const ease = (t) => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 const out = (t) => 1 - Math.pow(1 - t, 3);
@@ -52,12 +52,14 @@ const FINAL = {
       col *= 1. - r * mix(.5, 1.25, dark);
       col += flash * mix(vec3(1., .97, .95) * (1. - lum), vec3(1., .25, .3), dark);   // never past white on the bright side
       col += (h(u*900.)-.5) * mix(.012, .007, dark);
-      gl_FragColor = vec4(col,1.); }`,
+      gl_FragColor = vec4(col,1.);
+      #include <colorspace_fragment>
+    }`,   // the grade is the last pass and converts to the screen's colour space itself: one full-screen pass fewer
 };
 
 export function createStage(canvas) {
-  const renderer = new T.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-  const dpr = Math.min(devicePixelRatio || 1, 2); renderer.setPixelRatio(dpr);
+  const renderer = new T.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
+  canvas.addEventListener('webglcontextlost', (e) => e.preventDefault());
   const scene = new T.Scene(), camera = new T.PerspectiveCamera(40, 1, .1, 80);
   const world = new T.Group(); scene.add(world);
 
@@ -80,7 +82,12 @@ export function createStage(canvas) {
   }
 
 
-  // Pieces are sculpted figures: face 0 stands on the glass, face 1 hangs beneath it.
+  // Framing. `safe` lists the parts of the screen the HUD leaves free (CSS px insets). The cinematic camera is kept
+  // while its squares are big enough to hit; otherwise the board is fitted into the best free rectangle, and a steep
+  // camera makes standees lean back towards it and grow a little.
+  const view = { fit: false, pitch: .56, lean: .16, scale: 1, d: 13, tile: 80, far: 60, safe: [{ l: 0, t: 0, r: 0, b: 0 }] };
+
+  // Pieces are figures: face 0 stands on the glass, face 1 hangs beneath it.
   const pieces = new Map(); const textures = {};
   const chars = createCharacters({
     world,
@@ -90,7 +97,7 @@ export function createStage(canvas) {
   });
   // Whoever hangs in the far world is drawn over the glass with the see-through material.
   function order(face) {
-    for (const g of [...pieces.values(), ...corpses, ...(alice || [])]) chars.setNear(g, g.userData.face === face);
+    for (const g of [...pieces.values(), ...corpses, ...(alice || [])]) { chars.setNear(g, g.userData.face === face); restyle(g); }
     marks.forEach((m, side) => { m.visible = side === face; });
   }
   let alice = null, corpses = [], flipped = 0, state = null, busy = 0;
@@ -99,8 +106,8 @@ export function createStage(canvas) {
     clear(); state = st;
     alice = [chars.spawn('alice_a', 0), chars.spawn('alice_b', 1)]; alice.forEach((g) => g.position.copy(local(st.alice)));
     for (const e of st.enemies) { const g = chars.spawn(KINDS[e.kind].key, e.face); g.position.copy(local(e.at)); pieces.set(e.id, g); }
-    // Every Alice who died here still lies where she fell, on both sides of the glass.
-    st.corpses.forEach((c, i) => { for (const face of [0, 1]) { const g = chars.spawn(face ? 'alice_b' : 'alice_a', face); g.position.copy(local(c)); const p = g.userData.pose; p.fall = 1; p.grey = .85; p.still = true; p.yaw = (i * 2.4 + face) % 1.2 - .6; g.userData.char.u.uTint.value.set(face ? '#8a2030' : '#77708a'); g.scale.setScalar(.86); corpses.push(g); } });
+    // A body left behind lies where it fell, in a pool of ink, on both faces of the glass.
+    st.corpses.forEach((c, i) => { for (const face of [0, 1]) { const g = chars.spawn(face ? 'alice_b' : 'alice_a', face); g.position.copy(local(c)); const p = g.userData.pose; p.fall = 1; p.grey = .85; p.still = true; p.yaw = (i * 2.4 + face) % 1.2 - .6; g.userData.flat = true; g.userData.char.u.uTint.value.set(face ? '#d99aa6' : '#cfc6e6'); g.scale.setScalar(.86); const sh = g.userData.char.shade; sh.material.color.set(face ? '#000000' : '#2a0b2e'); sh.material.opacity = .92; sh.scale.setScalar(1.25); sh.position.y = .012; corpses.push(g); } });
     scenery.setBoard(st); order(flipped);
     tiles.forEach((pair, s) => pair.forEach((f) => { f.goal.visible = s === st.goal; f.goal.material.map = GLYPH.goal; f.goal.material.color.set('#ffd774'); f.goal.material.opacity = .95; }));
   }
@@ -113,7 +120,7 @@ export function createStage(canvas) {
       f.aim.material.blending = side ? T.AdditiveBlending : T.NormalBlending;
       const mv = side === face && moves.find((m) => m.to === s);
       f.move.visible = !!mv || (hint === s && side === face);
-      if (mv) { f.move.material.map = mv.capture !== null ? GLYPH.take : GLYPH.move; f.move.material.color.set(side ? '#ffffff' : '#1c4fd6'); f.move.material.blending = side ? T.AdditiveBlending : T.NormalBlending; f.move.material.opacity = hint === s ? 1 : mv.capture !== null ? .95 : side ? .6 : .8; f.move.scale.setScalar(hint === s ? 1.05 : mv.capture !== null ? .96 : side ? .36 : .56); }
+      if (mv) { f.move.material.map = mv.capture !== null ? GLYPH.take : GLYPH.move; f.move.material.color.set(side ? '#ffffff' : '#1c4fd6'); f.move.material.blending = side ? T.AdditiveBlending : T.NormalBlending; f.move.material.opacity = hint === s ? 1 : mv.capture !== null ? .95 : side ? .6 : .8; f.move.scale.setScalar(hint === s ? 1.05 : mv.capture !== null ? .96 : Math.min(.86, (side ? .36 : .56) * view.scale ** 1.5)); }
     }));
   }
 
@@ -134,14 +141,14 @@ export function createStage(canvas) {
   }
   // Acting. A figure's pose is plain numbers; characters.js turns them into motion every frame.
   const act = (g) => g.userData.pose;
-  const back = (t) => { const c = 2.2; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); };
+  const overshoot = (t) => { const c = 2.2; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); };
   // Jump: crouch, leap leaning into the travel, land with a squash that springs back.
   async function hop(g, a, b, ms, lift) {
     const p = act(g), dx = b.x - a.x, dz = b.z - a.z, n = Math.hypot(dx, dz) || 1, turn = Math.max(-.55, Math.min(.55, dx / n * .55)) * (g.userData.char.face ? -1 : 1);
     await tween(70, (k) => { p.squash = k * .14; p.yaw = turn * k * .5; }, out);
     await tween(ms, (k) => { g.position.lerpVectors(a, b, k); const arc = Math.sin(k * Math.PI); p.lift = arc * lift; p.squash = .14 * (1 - k * 4) * (k < .25 ? 1 : 0) - arc * .08; p.lean.set(dx / n * .16 * arc, dz / n * .16 * arc); p.yaw = turn * (.5 + .5 * Math.min(1, k * 2)); });
     p.lift = 0; p.lean.set(0, 0);
-    tween(300, (k) => { p.squash = .2 * (1 - back(k)); p.yaw = turn * (1 - k); }, (t) => t).then(() => { p.squash = 0; p.yaw = 0; });
+    tween(300, (k) => { p.squash = .2 * (1 - overshoot(k)); p.yaw = turn * (1 - k); }, (t) => t).then(() => { p.squash = 0; p.yaw = 0; });
   }
   // Glide: the mirror body never leaves the glass; she streaks along it, hair and skirt streaming behind.
   async function glide(g, a, b, ms) {
@@ -182,7 +189,7 @@ export function createStage(canvas) {
         await tween(150, (k) => { g.position.lerpVectors(a, b, k * .8); q.squash = .16 - k * .26; q.lean.set(dx / n * (.34 * k - .12), dz / n * (.34 * k - .12)); q.twist = -k * .5; }, out); fx.hurt = 1; kick(.8, 700); flare(.2);
         for (const side of [1, -1]) { vfx.ring(b, side, '#ff1030', 3.2, 800, side < 0 ? 1 : .2, .06); vfx.burst(b, side, { count: 44, speed: 3.6, up: .7, spread: 1.4, y: .6, h: .9, life: 1, size: .14, g: 4, colors: side < 0 ? HUE.ember : HUE.blood, add: side < 0 ? 1 : .05 }); }
         alice.forEach((al) => { act(al).still = true; });
-        await tween(700, (k) => { alice.forEach((al) => { const p = act(al); p.fall = back(Math.min(1, k * 1.15)); p.flash = Math.max(0, .9 - k * 4); p.grey = k * .85; }); g.position.lerpVectors(b, a, k).lerp(b, .8 * (1 - k)); q.squash = -.1 * (1 - k); q.lean.multiplyScalar(.9); q.twist = -.5 * (1 - k); }, out);
+        await tween(700, (k) => { alice.forEach((al) => { const p = act(al); p.fall = overshoot(Math.min(1, k * 1.15)); p.flash = Math.max(0, .9 - k * 4); p.grey = k * .85; }); g.position.lerpVectors(b, a, k).lerp(b, .8 * (1 - k)); q.squash = -.1 * (1 - k); q.lean.multiplyScalar(.9); q.twist = -.5 * (1 - k); }, out);
         q.lean.set(0, 0);
         await tween(500, (k) => { fx.hurt = 1 - k; }); }
       if (e.t === 'win') { hooks.sfx('win'); const at = alice[0].position; flare(.3, 900);
@@ -199,39 +206,132 @@ export function createStage(canvas) {
     const x = Math.round(hit.x + (W - 1) / 2), y = Math.round(hit.z + (H - 1) / 2); return x >= 0 && y >= 0 && x < W && y < H ? y * W + x : -1;
   }
 
+  const projected = new T.Vector3();
+  const toScreen = (x, y, z) => { const r = canvas.getBoundingClientRect(); world.localToWorld(projected.set(x, y, z)).project(camera); return [r.left + (projected.x + 1) / 2 * r.width, r.top + (1 - projected.y) / 2 * r.height]; };
+  // A finger aims at the figure, not at the square under its feet: the square of the standee of `face` drawn under the point.
+  function pickPiece(cx, cy, face) {
+    let found = -1, depth = -1e9;
+    for (const g of pieces.values()) {
+      if (!g.visible || g.userData.face !== face) continue;
+      const p = g.position, l = g.userData.h * view.scale, far = face !== flipped, lean = far ? -view.lean - .1 : view.lean, z = p.z + g.userData.tilt.position.z;   // a far-face figure hangs toward the camera, set back
+      const [ax, ay] = toScreen(p.x, 0, z), [bx, by] = toScreen(p.x, (face ? -1 : 1) * l * Math.cos(lean), z - l * Math.sin(lean));
+      const dx = bx - ax, dy = by - ay, k = ((cx - ax) * dx + (cy - ay) * dy) / (dx * dx + dy * dy || 1);
+      if (k < (far ? 0 : .15) || k > 1 || Math.hypot(cx - ax - dx * k, cy - ay - dy * k) > view.tile * (far ? .2 : .3) || p.z < depth) continue;   // a far figure claims a narrower strip, leaving the squares it crosses room to be tapped
+      depth = p.z; found = Math.round(p.z + (H - 1) / 2) * W + Math.round(p.x + (W - 1) / 2);
+    }
+    return found;
+  }
+  function project(s) { const r = canvas.getBoundingClientRect(); world.localToWorld(projected.copy(local(s))).project(camera); return { x: r.left + (projected.x + 1) / 2 * r.width, y: r.top + (1 - projected.y) / 2 * r.height }; }
+  // The square under a finger: a ring on the glass plus a beam, so it reads even when the fingertip covers it.
+  const cur = new T.Group(); cur.visible = false; world.add(cur);
+  const ring = lay(flat(GLYPH.take, '#fff', 1, { blending: T.AdditiveBlending }), 0, 1.08), glow = lay(flat(GLYPH.blob, '#fff', .55, { blending: T.AdditiveBlending }), 0, 1.5);
+  const beam = new T.Mesh(plane, flat(GLYPH.blob, '#fff', .5, { blending: T.AdditiveBlending, side: T.DoubleSide })); beam.scale.set(.16, 5, 1); beam.position.y = 2.3;
+  ring.position.y = .03; glow.position.y = .025; cur.add(ring, glow, beam); cur.traverse((m) => { m.renderOrder = 3; });
+  function cursor(s, face = 0, color = '#ffffff') {
+    cur.visible = s >= 0; if (s < 0) return;
+    cur.position.copy(local(s)); cur.rotation.z = face ? Math.PI : 0; for (const m of [ring, glow, beam]) m.material.color.set(color);
+  }
+
+
   const composer = new EffectComposer(renderer); composer.addPass(new RenderPass(scene, camera));
   const bloom = new UnrealBloomPass(new T.Vector2(256, 256), .2, .6, .9); composer.addPass(bloom);
-  const final = new ShaderPass(FINAL); composer.addPass(final); composer.addPass(new OutputPass());
+  const final = new ShaderPass(FINAL); composer.addPass(final);
   let portrait = false, lift = 0; const edge = new T.Vector3();
-  const pose = (c, d, sway) => { camera.position.set(sway, Math.sin(c.pitch) * d, Math.cos(c.pitch) * d + c.back); camera.lookAt(0, c.ly - lift, c.lz); };
-  function resize() {
-    const w = canvas.clientWidth, h = canvas.clientHeight; if (!w || !h) return;
-    renderer.setSize(w, h, false); composer.setSize(w, h); camera.aspect = w / h; portrait = w / h < .8; const c = portrait ? TALL : CAM;
-    camera.fov = c.fov; camera.updateProjectionMatrix();
-    // tilt down, then pull back, until the near edge of the board clears whatever HUD sits at the bottom centre (the flip button)
+  const cine = (c, d, sway) => { camera.position.set(sway, Math.sin(c.pitch) * d, Math.cos(c.pitch) * d + c.back); camera.lookAt(0, c.ly - lift, c.lz); camera.updateMatrixWorld(); };
+  const pose = (d, sway = 0) => { camera.position.set(sway, Math.sin(view.pitch) * d, Math.cos(view.pitch) * d); camera.lookAt(0, 0, 0); camera.updateMatrixWorld(); };
+  const px = (x, y, z, w, h) => { projected.set(x, y, z).project(camera); return [(projected.x + 1) / 2 * w, (1 - projected.y) / 2 * h]; };
+  const tileAt = (z, w, h) => px(.5, 0, z, w, h)[0] - px(-.5, 0, z, w, h)[0];
+  // The cinematic framing: tilt down, then pull back, until the near edge of the board clears the flip button.
+  // how many pixels deep the far row has to be before a finger (or a mouse) hits it reliably
+  const DEEP = matchMedia('(pointer: coarse)').matches ? 34 : 22;
+  function frameCine(w, h) {
+    const c = portrait ? TALL : CAM; camera.fov = c.fov; camera.updateProjectionMatrix();
     const hud = document.getElementById('flip')?.getBoundingClientRect(), limit = (hud && hud.height ? hud.top : h) - 6;
     let d = Math.max(c.dist, c.wide / (w / h));
-    const clear = () => { pose(c, d, 0); camera.updateMatrixWorld(); return (1 - edge.set(0, 0, H / 2).project(camera).y) / 2 * h <= limit; };
+    const clear = () => { cine(c, d, 0); return (1 - edge.set(0, 0, H / 2).project(camera).y) / 2 * h <= limit; };
     for (lift = 0; lift < 3 && !clear(); lift += .25);
     for (; d < 40 && !clear(); d += .25);
-    camera.userData.base = d;
+    camera.userData.base = d; cine(c, d, 0);
+    // it stands only if every square is inside one free rectangle and the far row is wide enough for a finger
+    const far = tileAt(.5 - H / 2, w, h), xs = [], ys = [];
+    for (const x of [-W / 2, W / 2]) for (const z of [-H / 2, H / 2]) { const q = px(x, 0, z, w, h); xs.push(q[0]); ys.push(q[1]); }
+    const inside = view.safe.some((s) => Math.min(...xs) >= s.l && Math.max(...xs) <= w - s.r && Math.min(...ys) >= s.t && Math.max(...ys) <= h - s.b);
+    const deep = px(0, 0, 1 - H / 2, w, h)[1] - px(0, 0, -H / 2, w, h)[1];
+    return { ok: inside && far >= 46 && deep >= DEEP, pitch: c.pitch, tile: tileAt(0, w, h), far };
   }
-  addEventListener('resize', resize); resize();
+  // The fitted framing: try every free rectangle the HUD offers and keep the one that shows the largest squares.
+  function frameIn(s, w, h) {
+    let best = null; // a square is as easy to hit as its far row is wide and deep; a steep camera shows less of the figures' faces, so it has to earn its pitch
+    for (let p = .44; p < 1.08; p += .04) { view.pitch = p; const f = frameAt(s, w, h); f.score = f.far * Math.min(1, f.deep / DEEP) * (1 - .15 * Math.max(0, p - .52)); if (!best || f.score > best.score) best = f; }
+    return best;
+  }
+  const TRIM = .4;   // how far the slim frame reaches past the squares
+  function frameAt(s, w, h) {
+    const fw = Math.max(120, w - s.l - s.r), fh = Math.max(120, h - s.t - s.b), head = 1.7 * view.scale;
+    const pts = []; for (const x of [-1, 1]) pts.push([x * (W / 2 + TRIM), 0, H / 2 + TRIM], [x * (W / 2 + TRIM), 0, -H / 2 - TRIM], [x * (W / 2 + .2), head, -H / 2 + .5], [x * W / 2, -.7, H / 2 - .5]);
+    const box = (d) => { pose(d); let x0 = 9, x1 = -9, y0 = 9, y1 = -9; for (const p of pts) { projected.set(...p).project(camera); x0 = Math.min(x0, projected.x); x1 = Math.max(x1, projected.x); y0 = Math.min(y0, projected.y); y1 = Math.max(y1, projected.y); } return { x0, x1, y0, y1 }; };
+    let lo = 3, hi = 90; for (let i = 0; i < 24; i++) { const d = (lo + hi) / 2, b = box(d); if ((b.x1 - b.x0) / 2 * w <= fw && (b.y1 - b.y0) / 2 * h <= fh) hi = d; else lo = d; }
+    const b = box(hi);
+    return { pitch: view.pitch, d: hi, tile: tileAt(0, w, h), far: tileAt(.5 - H / 2, w, h), deep: px(0, 0, 1 - H / 2, w, h)[1] - px(0, 0, -H / 2, w, h)[1], ox: (b.x0 + b.x1) / 4 * w - (s.l + fw / 2 - w / 2), oy: -(b.y0 + b.y1) / 4 * h - (s.t + fh / 2 - h / 2) };
+  }
+  // A figure leans back to face a steep camera. One hanging in the far world has to lean the other way, or it is seen edge-on.
+  // seen through the glass it would lie across the row in front, so it is set back by half its own length to sit over its square
+  const restyle = (g) => {
+    const u = g.userData; if (u.flat) return;
+    const near = u.face === flipped, a = view.lean + .1;
+    u.tilt.rotation.x = .16 - (near ? view.lean : -a); u.tilt.scale.setScalar(view.scale);
+    u.tilt.position.z = near ? 0 : -u.h * view.scale * (Math.sin(a) + Math.cos(a) / Math.tan(view.pitch)) / 2;
+  };
+  function fit() {
+    const w = canvas.clientWidth, h = canvas.clientHeight; if (!w || !h) return;
+    camera.clearViewOffset(); camera.aspect = w / h; portrait = w / h < .8;
+    const c = frameCine(w, h); view.fit = !c.ok; let f = c; scenery.setSlim(view.fit);
+    if (view.fit) {
+      for (const s of view.safe) { const g = frameIn(s, w, h); g.score *= s.weight || 1; if (f === c || g.score > f.score) f = g; }
+      view.d = f.d; view.pitch = f.pitch; camera.setViewOffset(w, h, f.ox, f.oy, w, h); pose(f.d);
+    }
+    Object.assign(view, { pitch: f.pitch, tile: f.tile, far: f.far, lean: Math.min(.62, Math.max(.16, f.pitch - .4)), scale: Math.min(1.25, Math.max(1, 72 / f.tile)) });
+    for (const g of [...pieces.values(), ...corpses, ...(alice || [])]) restyle(g);
+  }
+  function resize() {
+    const w = canvas.clientWidth, h = canvas.clientHeight; if (!w || !h) return;
+    renderer.setSize(w, h, false); composer.setSize(w, h); fit();
+    const r = renderer.getPixelRatio() * back; backdrop.setSize(Math.max(1, Math.round(w * r)), Math.max(1, Math.round(h * r)));
+    bloom.setSize(w * renderer.getPixelRatio() / 2, h * renderer.getPixelRatio() / 2);   // a glow this soft loses nothing at half size
+  }
+  // Sky and sea go into their own buffer, `back` times the size of the picture, and become the scene's background:
+  // they are soft paint and water, so a phone can halve them and keep the board and the pieces at full sharpness. At full size they are drawn straight into the picture.
+  const backdrop = new T.WebGLRenderTarget(1, 1, { type: T.HalfFloatType, depthBuffer: false }); let back = 1;
+  const quality = createQuality((q) => { back = q.back; scene.background = null; camera.layers.set(0); if (back === 1) camera.layers.enable(BACKDROP); renderer.setPixelRatio(q.ratio); composer.setPixelRatio(q.ratio); bloom.enabled = q.bloom; resize(); });
+  addEventListener('resize', resize);
+  function setSafe(list) { view.safe = list; fit(); }
   if (import.meta.env.DEV) window.__cam = CAM;
-  const m4 = new T.Object3D(); let last = performance.now();
+  // The camera leans a little toward the pointer, so the near towers slide across the far sky.
+  const lean = { x: 0, y: 0, tx: 0, ty: 0 };
+  addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse') { lean.tx = e.clientX / innerWidth * 2 - 1; lean.ty = e.clientY / innerHeight * 2 - 1; } });
+  const m4 = new T.Object3D(); let last = performance.now(), prev = last;
   function frame(now) {
     const dt = Math.min(.05, (now - last) / 1000); last = now; const t = now / 1000;
     for (const tw of [...tweens]) { const k = Math.min(1, (now - tw.t0) / tw.ms); tw.fn(tw.curve(k)); if (k >= 1) { tweens.delete(tw); tw.done(); } }
-    const c = portrait ? TALL : CAM, d = (camera.userData.base || 13) + (camera.userData.dolly || 0);
-    pose(c, d, Math.sin(t * .13) * .3);
+    quality.tick(now - prev); prev = now; const dolly = camera.userData.dolly || 0;
+    const roomy = camera.aspect > 1.2 && canvas.clientWidth >= 900;   // the fitted framing keeps the board centred, so a wide window can lean too
+    lean.x += (lean.tx - lean.x) * Math.min(1, dt * 3); lean.y += (lean.ty - lean.y) * Math.min(1, dt * 3);
+    if (view.fit) { pose(view.d + dolly * view.d / 13, (Math.sin(t * .13) * .025 + (roomy ? lean.x * .07 : 0)) * view.d); if (roomy) { camera.position.y -= lean.y * .025 * view.d; camera.lookAt(0, 0, 0); camera.updateMatrixWorld(); } } else if (portrait) cine(TALL, (camera.userData.base || 13) + dolly, Math.sin(t * .13) * .3);   // a tall window has no room at the sides to lean into
+    else { cine(CAM, (camera.userData.base || 13) + dolly, Math.sin(t * .13) * .5 + lean.x * 1.4); camera.position.y -= lean.y * .5; camera.lookAt(0, CAM.ly - lift, CAM.lz); camera.updateMatrixWorld(); }
+    if (cur.visible) { ring.scale.setScalar(1.08 + Math.sin(t * 9) * .05); beam.material.opacity = .35 + .15 * Math.sin(t * 9); }
     scenery.update(t, dt); vfx.update(dt, canvas.clientHeight);
     const pulse = .5 + .5 * Math.sin(t * 4);
     tiles.forEach((pair) => pair.forEach((f) => { if (f.goal.visible) f.goal.material.opacity = .6 + .4 * pulse; }));
     chars.update(t, dt);
+    // the grade follows the glass as it turns, at any frame rate
     final.uniforms.time.value = t; final.uniforms.punch.value = fx.punch; final.uniforms.hurt.value = fx.hurt; final.uniforms.flash.value = fx.flash;
-    final.uniforms.dark.value += ((flipped ? 1 : 0) - final.uniforms.dark.value) * .08; bloom.strength = .14 + final.uniforms.dark.value * .3; bloom.threshold = .9 - final.uniforms.dark.value * .25;
+    final.uniforms.dark.value = (1 - Math.cos(world.rotation.z)) / 2; bloom.strength = .14 + final.uniforms.dark.value * .3; bloom.threshold = .9 - final.uniforms.dark.value * .25;
+    if (back < 1) {
+      scene.background = null; camera.layers.set(BACKDROP); renderer.setRenderTarget(backdrop); renderer.render(scene, camera);
+      renderer.setRenderTarget(null); camera.layers.set(0); scene.background = backdrop.texture;
+    }
     composer.render(); requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
-  return { load, paint, flip, animate, pick, resize, get busy() { return busy > 0; } };
+  return { load, paint, flip, animate, pick, pickPiece, project, cursor, setSafe, resize, view, quality, get busy() { return busy > 0; } };
 }
