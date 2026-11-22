@@ -83,6 +83,7 @@ export function createStage(canvas) {
 
       const mk = (z) => { const m = lay(flat(GLYPH.move, '#fff', 0, { blending: T.AdditiveBlending }), face, .9); m.position.set(p.x, (face ? -1 : 1) * z, p.z); m.renderOrder = -2; m.visible = false; marks[face].add(m); return m; };
       pair.push({ aim: mk(.012), move: mk(.02), goal: mk(.016) });
+      if (face) pair[1].goal.rotation.z = Math.PI;   // the crown's points stay up once the board is turned over
     }
     tiles.push(pair);
   }
