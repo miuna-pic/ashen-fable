@@ -53,6 +53,11 @@ body.dark #stage { filter: brightness(.55) saturate(.7); transition: filter .5s;
   #chips { top: auto; bottom: calc(max(16px, env(safe-area-inset-bottom)) + 96px); }
   #coach { top: max(clamp(118px, 19vh, 170px), calc(max(14px, env(safe-area-inset-top)) + clamp(72px, 17vw, 130px) + 62px)); padding: 12px 14px 10px; }
 }
+/* A landscape phone has no clear row above the board: the coach takes the strip right of it, as the dialogue does, and leaves the tools and the far rank in sight. */
+@media (orientation: landscape) and (max-height: 540px) {
+  #coach { left: auto; right: max(14px, env(safe-area-inset-right)); transform: none; top: calc(max(10px, env(safe-area-inset-top)) + clamp(64px, 20vh, 96px)); width: clamp(160px, calc(var(--gap, 28vw) - 24px), 320px); padding: 16px 12px 12px; }
+  #coach p { font-size: 13px; line-height: 1.65; letter-spacing: .02em; }
+}
 /* A narrow window that is not a portrait phone: the bottom row cannot hold the ink, the flip and five tools, so the tools go up under the counter and the flip keeps the row. */
 @media (max-width: 760px) and (min-aspect-ratio: 4/5) and (min-height: 541px), (max-width: 760px) and (min-aspect-ratio: 4/5) and (orientation: portrait) {
   .tools { position: fixed; right: max(14px, env(safe-area-inset-right)); top: calc(max(14px, env(safe-area-inset-top)) + clamp(66px, 21vw, 130px)); }
