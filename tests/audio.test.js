@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
-import { cueFor, stepNote, CHAPTER_CUES } from '../src/audio.js';
+import { cueFor, stepNote, CHAPTER_CUES, voiceKey } from '../src/audio.js';
 import { LEVELS } from '../src/levels.js';
 
 const score = JSON.parse(readFileSync(new URL('../public/audio/score.json', import.meta.url)));
@@ -43,4 +43,12 @@ test('footsteps ring chord tones: climbing above the glass, falling below it', (
   assert.deepEqual(up, [74, 77, 81, 86]);
   assert.deepEqual(down, [74, 69, 65, 62]);
   for (const pcs of score.rabbit.chords.flat()) for (let n = 0; n < 4; n++) assert.ok(pcs.includes(stepNote(pcs, n, 0) % 12));
+});
+
+test('every recorded line is a line someone still says', () => {
+  const lines = JSON.parse(readFileSync(new URL('../public/audio/voice/lines.json', import.meta.url)));
+  const wanted = new Set(JSON.parse(readFileSync(new URL('../tools/audio/voice-lines.json', import.meta.url))).map((l) => l.key));
+  for (const key of Object.keys(lines)) { assert.ok(wanted.has(key), key); assert.ok(file(`voice/${key}.m4a`), key); }
+  assert.equal(voiceKey('b', '你又掉下来了。'), '4d164317');
+  assert.equal(voiceKey('b', '〔玻璃另一面〕你又掉下来了。'), '4d164317');
 });
