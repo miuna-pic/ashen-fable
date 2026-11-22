@@ -2,7 +2,7 @@
 
 Everything under `public/audio` is rendered offline by the scripts here, from sampled instruments. Nothing is synthesised in the browser.
 
-- `score.py` composes and renders the cues. One 16-bar lullaby in D Dorian is the whole score; each chapter re-orchestrates it. Every cue is three bar-locked stems: `-a` above the glass, `-b` the same tune melodically inverted around D5 for the mirror face (Dorian is its own mirror, so the inversion stays in key and every chord swaps quality), `-p` the danger layer. `score.json` carries tempo, loop length and the chord of every bar, which the game uses to pitch footsteps.
+- `score.py` composes and renders the cues: the title and one theme per chapter (`rabbit`, `tea`, `croquet`, `ball`, `match`, `wall`, `wood`, `trial`), each with its own tune, key, metre and band. The first two chapters share the D Dorian lullaby; the others are new tunes. Every cue is three bar-locked stems: `-a` above the glass, `-b` the same tune melodically inverted around its home note for the mirror face (every chord swaps quality), `-p` the danger layer. `score.json` carries tempo, beats per bar, the inversion axis, loop length and the chord of every bar, which the game uses to pitch footsteps.
 - `sfx.py` renders the one-shots and stingers into `public/audio/sfx`.
 - `synth.py` is the sampler, reverb, limiter and loop wrapper. `diag.py` checks instrument tuning, `bands.py` prints the spectral balance of rendered files.
 
