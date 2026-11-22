@@ -8,6 +8,7 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { W, H, X, Y, KINDS } from './rules.js';
 import { createScenery } from './scenery.js';
 import { createVfx, HUE } from './vfx.js';
+import { createQuality } from './quality.js';
 
 const ease = (t) => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 const out = (t) => 1 - Math.pow(1 - t, 3);
@@ -57,8 +58,8 @@ const FINAL = {
 };
 
 export function createStage(canvas) {
-  const renderer = new T.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-  const dpr = Math.min(devicePixelRatio || 1, 2); renderer.setPixelRatio(dpr);
+  const renderer = new T.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
+  canvas.addEventListener('webglcontextlost', (e) => e.preventDefault());
   const scene = new T.Scene(), camera = new T.PerspectiveCamera(40, 1, .1, 80);
   const world = new T.Group(); scene.add(world);
 
@@ -81,6 +82,11 @@ export function createStage(canvas) {
   }
 
 
+  // Framing. `safe` lists the parts of the screen the HUD leaves free (CSS px insets). The cinematic camera is kept
+  // while its squares are big enough to hit; otherwise the board is fitted into the best free rectangle, and a steep
+  // camera makes standees lean back towards it and grow a little.
+  const view = { fit: false, pitch: .56, lean: .16, scale: 1, d: 13, tile: 80, far: 60, safe: [{ l: 0, t: 0, r: 0, b: 0 }] };
+
   // Pieces are standees: face 0 stands on the glass, face 1 hangs beneath it.
   const pieces = new Map(); const textures = {};
   function standee(name, face) {
@@ -88,7 +94,8 @@ export function createStage(canvas) {
     const h = HEIGHT[name] || 1.34, g = new T.Group(), body = new T.Mesh(plane, new T.MeshBasicMaterial({ map: textures[name], transparent: true, alphaTest: .35, side: T.DoubleSide, toneMapped: false }));
     body.scale.set(h * ASPECT[name], h, 1); body.position.y = h / 2 - .03; body.rotation.x = -.16;
     const shade = lay(flat(GLYPH.blob, face ? '#ff1d3a' : '#27304d', face ? .5 : .45), 0, .95); shade.position.y = .004;
-    const inner = new T.Group(); inner.add(body, shade); if (face) inner.rotation.z = Math.PI; g.add(inner); g.userData = { body, inner, h, face, shade, here: body.material, far: scenery.through(textures[name]) }; world.add(g); return g;
+    const tilt = new T.Group(); tilt.add(body); tilt.rotation.x = .16 - view.lean; tilt.scale.setScalar(view.scale);
+    const inner = new T.Group(); inner.add(tilt, shade); if (face) inner.rotation.z = Math.PI; g.add(inner); g.userData = { body, inner, tilt, h, face, shade, here: body.material, far: scenery.through(textures[name]) }; world.add(g); return g;
   }
   // Whoever hangs in the far world is drawn over the glass with the see-through material.
   function order(face) {
@@ -114,7 +121,7 @@ export function createStage(canvas) {
       f.aim.material.blending = side ? T.AdditiveBlending : T.NormalBlending;
       const mv = side === face && moves.find((m) => m.to === s);
       f.move.visible = !!mv || (hint === s && side === face);
-      if (mv) { f.move.material.map = mv.capture !== null ? GLYPH.take : GLYPH.move; f.move.material.color.set(side ? '#ffffff' : '#1c4fd6'); f.move.material.blending = side ? T.AdditiveBlending : T.NormalBlending; f.move.material.opacity = hint === s ? 1 : mv.capture !== null ? .95 : side ? .6 : .8; f.move.scale.setScalar(hint === s ? 1.05 : mv.capture !== null ? .96 : side ? .36 : .56); }
+      if (mv) { f.move.material.map = mv.capture !== null ? GLYPH.take : GLYPH.move; f.move.material.color.set(side ? '#ffffff' : '#1c4fd6'); f.move.material.blending = side ? T.AdditiveBlending : T.NormalBlending; f.move.material.opacity = hint === s ? 1 : mv.capture !== null ? .95 : side ? .6 : .8; f.move.scale.setScalar(hint === s ? 1.05 : mv.capture !== null ? .96 : Math.min(.86, (side ? .36 : .56) * view.scale ** 1.5)); }
     }));
   }
 
@@ -169,40 +176,108 @@ export function createStage(canvas) {
     const x = Math.round(hit.x + (W - 1) / 2), y = Math.round(hit.z + (H - 1) / 2); return x >= 0 && y >= 0 && x < W && y < H ? y * W + x : -1;
   }
 
+  const projected = new T.Vector3();
+  const toScreen = (x, y, z) => { const r = canvas.getBoundingClientRect(); world.localToWorld(projected.set(x, y, z)).project(camera); return [r.left + (projected.x + 1) / 2 * r.width, r.top + (1 - projected.y) / 2 * r.height]; };
+  // A finger aims at the figure, not at the square under its feet: the square of the standee of `face` drawn under the point.
+  function pickPiece(cx, cy, face) {
+    let found = -1, depth = -1e9;
+    for (const g of pieces.values()) {
+      if (!g.visible || g.userData.face !== face) continue;
+      const p = g.position, l = g.userData.h * view.scale, [ax, ay] = toScreen(p.x, 0, p.z), [bx, by] = toScreen(p.x, (face ? -1 : 1) * l * Math.cos(view.lean), p.z - l * Math.sin(view.lean));
+      const dx = bx - ax, dy = by - ay, k = ((cx - ax) * dx + (cy - ay) * dy) / (dx * dx + dy * dy || 1);
+      if (k < .15 || k > 1 || Math.hypot(cx - ax - dx * k, cy - ay - dy * k) > view.tile * .3 || p.z < depth) continue;
+      depth = p.z; found = Math.round(p.z + (H - 1) / 2) * W + Math.round(p.x + (W - 1) / 2);
+    }
+    return found;
+  }
+  function project(s) { const r = canvas.getBoundingClientRect(); world.localToWorld(projected.copy(local(s))).project(camera); return { x: r.left + (projected.x + 1) / 2 * r.width, y: r.top + (1 - projected.y) / 2 * r.height }; }
+  // The square under a finger: a ring on the glass plus a beam, so it reads even when the fingertip covers it.
+  const cur = new T.Group(); cur.visible = false; world.add(cur);
+  const ring = lay(flat(GLYPH.take, '#fff', 1, { blending: T.AdditiveBlending }), 0, 1.08), glow = lay(flat(GLYPH.blob, '#fff', .55, { blending: T.AdditiveBlending }), 0, 1.5);
+  const beam = new T.Mesh(plane, flat(GLYPH.blob, '#fff', .5, { blending: T.AdditiveBlending, side: T.DoubleSide })); beam.scale.set(.16, 5, 1); beam.position.y = 2.3;
+  ring.position.y = .03; glow.position.y = .025; cur.add(ring, glow, beam); cur.traverse((m) => { m.renderOrder = 3; });
+  function cursor(s, face = 0, color = '#ffffff') {
+    cur.visible = s >= 0; if (s < 0) return;
+    cur.position.copy(local(s)); cur.rotation.z = face ? Math.PI : 0; for (const m of [ring, glow, beam]) m.material.color.set(color);
+  }
+
+
   const composer = new EffectComposer(renderer); composer.addPass(new RenderPass(scene, camera));
   const bloom = new UnrealBloomPass(new T.Vector2(256, 256), .2, .6, .9); composer.addPass(bloom);
   const final = new ShaderPass(FINAL); composer.addPass(final); composer.addPass(new OutputPass());
   let portrait = false, lift = 0; const edge = new T.Vector3();
-  const pose = (c, d, sway) => { camera.position.set(sway, Math.sin(c.pitch) * d, Math.cos(c.pitch) * d + c.back); camera.lookAt(0, c.ly - lift, c.lz); };
-  function resize() {
-    const w = canvas.clientWidth, h = canvas.clientHeight; if (!w || !h) return;
-    renderer.setSize(w, h, false); composer.setSize(w, h); camera.aspect = w / h; portrait = w / h < 1; const c = portrait ? TALL : CAM;
-    camera.fov = c.fov; camera.updateProjectionMatrix();
-    // tilt down, then pull back, until the near edge of the board clears whatever HUD sits at the bottom centre (the flip button)
-    // and the near corners of the frame are inside the window
+  const cine = (c, d, sway) => { camera.position.set(sway, Math.sin(c.pitch) * d, Math.cos(c.pitch) * d + c.back); camera.lookAt(0, c.ly - lift, c.lz); camera.updateMatrixWorld(); };
+  const pose = (d, sway = 0) => { camera.position.set(sway, Math.sin(view.pitch) * d, Math.cos(view.pitch) * d); camera.lookAt(0, 0, 0); camera.updateMatrixWorld(); };
+  const px = (x, y, z, w, h) => { projected.set(x, y, z).project(camera); return [(projected.x + 1) / 2 * w, (1 - projected.y) / 2 * h]; };
+  const tileAt = (z, w, h) => px(.5, 0, z, w, h)[0] - px(-.5, 0, z, w, h)[0];
+  // The cinematic framing: tilt down, then pull back, until the near edge of the board clears the flip button.
+  // how many pixels deep the far row has to be before a finger (or a mouse) hits it reliably
+  const DEEP = matchMedia('(pointer: coarse)').matches ? 34 : 22;
+  function frameCine(w, h) {
+    const c = portrait ? TALL : CAM; camera.fov = c.fov; camera.updateProjectionMatrix();
     const hud = document.getElementById('flip')?.getBoundingClientRect(), limit = (hud && hud.height ? hud.top : h) - 6;
     let d = Math.max(c.dist, c.wide / (w / h));
-    const clear = () => { pose(c, d, 0); camera.updateMatrixWorld(); return (1 - edge.set(0, 0, H / 2).project(camera).y) / 2 * h <= limit && Math.abs(edge.set(W / 2 + .9, 0, H / 2 + .9).project(camera).x) <= .98; };
+    const clear = () => { cine(c, d, 0); return (1 - edge.set(0, 0, H / 2).project(camera).y) / 2 * h <= limit; };
     for (lift = 0; lift < 3 && !clear(); lift += .25);
     for (; d < 40 && !clear(); d += .25);
-    camera.userData.base = d;
+    camera.userData.base = d; cine(c, d, 0);
+    // it stands only if every square is inside one free rectangle and the far row is wide enough for a finger
+    const far = tileAt(.5 - H / 2, w, h), xs = [], ys = [];
+    for (const x of [-W / 2, W / 2]) for (const z of [-H / 2, H / 2]) { const q = px(x, 0, z, w, h); xs.push(q[0]); ys.push(q[1]); }
+    const inside = view.safe.some((s) => Math.min(...xs) >= s.l && Math.max(...xs) <= w - s.r && Math.min(...ys) >= s.t && Math.max(...ys) <= h - s.b);
+    const deep = px(0, 0, 1 - H / 2, w, h)[1] - px(0, 0, -H / 2, w, h)[1];
+    return { ok: inside && far >= 46 && deep >= DEEP, pitch: c.pitch, tile: tileAt(0, w, h), far };
   }
-  addEventListener('resize', resize); resize();
+  // The fitted framing: try every free rectangle the HUD offers and keep the one that shows the largest squares.
+  function frameIn(s, w, h) {
+    let best = null; // a square is as easy to hit as its far row is wide and deep; a steep camera shows less of the figures' faces, so it has to earn its pitch
+    for (let p = .44; p < 1.08; p += .04) { view.pitch = p; const f = frameAt(s, w, h); f.score = f.far * Math.min(1, f.deep / DEEP) * (1 - .15 * Math.max(0, p - .52)); if (!best || f.score > best.score) best = f; }
+    return best;
+  }
+  function frameAt(s, w, h) {
+    const fw = Math.max(120, w - s.l - s.r), fh = Math.max(120, h - s.t - s.b), head = 1.7 * view.scale;
+    const pts = []; for (const x of [-1, 1]) pts.push([x * (W / 2 + .15), 0, H / 2 + .15], [x * (W / 2 + .15), 0, -H / 2 - .15], [x * (W / 2 + .2), head, -H / 2 + .5], [x * W / 2, -.7, H / 2 - .5]);
+    const box = (d) => { pose(d); let x0 = 9, x1 = -9, y0 = 9, y1 = -9; for (const p of pts) { projected.set(...p).project(camera); x0 = Math.min(x0, projected.x); x1 = Math.max(x1, projected.x); y0 = Math.min(y0, projected.y); y1 = Math.max(y1, projected.y); } return { x0, x1, y0, y1 }; };
+    let lo = 3, hi = 90; for (let i = 0; i < 24; i++) { const d = (lo + hi) / 2, b = box(d); if ((b.x1 - b.x0) / 2 * w <= fw && (b.y1 - b.y0) / 2 * h <= fh) hi = d; else lo = d; }
+    const b = box(hi);
+    return { pitch: view.pitch, d: hi, tile: tileAt(0, w, h), far: tileAt(.5 - H / 2, w, h), deep: px(0, 0, 1 - H / 2, w, h)[1] - px(0, 0, -H / 2, w, h)[1], ox: (b.x0 + b.x1) / 4 * w - (s.l + fw / 2 - w / 2), oy: -(b.y0 + b.y1) / 4 * h - (s.t + fh / 2 - h / 2) };
+  }
+  const restyle = (g) => { g.userData.tilt.rotation.x = .16 - view.lean; g.userData.tilt.scale.setScalar(view.scale); };
+  function fit() {
+    const w = canvas.clientWidth, h = canvas.clientHeight; if (!w || !h) return;
+    camera.clearViewOffset(); camera.aspect = w / h; portrait = w / h < .8;
+    const c = frameCine(w, h); view.fit = !c.ok; let f = c;
+    if (view.fit) {
+      for (const s of view.safe) { const g = frameIn(s, w, h); g.score *= s.weight || 1; if (f === c || g.score > f.score) f = g; }
+      view.d = f.d; view.pitch = f.pitch; camera.setViewOffset(w, h, f.ox, f.oy, w, h); pose(f.d);
+    }
+    Object.assign(view, { pitch: f.pitch, tile: f.tile, far: f.far, lean: Math.min(.62, Math.max(.16, f.pitch - .4)), scale: Math.min(1.25, Math.max(1, 72 / f.tile)) });
+    for (const g of [...pieces.values(), ...corpses, ...(alice || [])]) restyle(g);
+  }
+  function resize() {
+    const w = canvas.clientWidth, h = canvas.clientHeight; if (!w || !h) return;
+    renderer.setSize(w, h, false); composer.setSize(w, h); fit();
+  }
+  const quality = createQuality((q) => { renderer.setPixelRatio(q.ratio); composer.setPixelRatio(q.ratio); bloom.enabled = q.bloom; resize(); });
+  addEventListener('resize', resize);
+  function setSafe(list) { view.safe = list; fit(); }
   if (import.meta.env.DEV) window.__cam = CAM;
-  const m4 = new T.Object3D(); let last = performance.now();
+  const m4 = new T.Object3D(); let last = performance.now(), prev = last;
   function frame(now) {
     const dt = Math.min(.05, (now - last) / 1000); last = now; const t = now / 1000;
     for (const tw of [...tweens]) { const k = Math.min(1, (now - tw.t0) / tw.ms); tw.fn(tw.curve(k)); if (k >= 1) { tweens.delete(tw); tw.done(); } }
-    const c = portrait ? TALL : CAM, d = (camera.userData.base || 13) + (camera.userData.dolly || 0);
-    pose(c, d, Math.sin(t * .13) * .3);
+    quality.tick(now - prev); prev = now; const dolly = camera.userData.dolly || 0;
+    if (view.fit) pose(view.d + dolly * view.d / 13, Math.sin(t * .13) * .025 * view.d); else cine(portrait ? TALL : CAM, (camera.userData.base || 13) + dolly, Math.sin(t * .13) * .3);
+    if (cur.visible) { ring.scale.setScalar(1.08 + Math.sin(t * 9) * .05); beam.material.opacity = .35 + .15 * Math.sin(t * 9); }
     scenery.update(t, dt); vfx.update(dt, canvas.clientHeight);
     const pulse = .5 + .5 * Math.sin(t * 4);
     tiles.forEach((pair) => pair.forEach((f) => { if (f.goal.visible) f.goal.material.opacity = .6 + .4 * pulse; }));
     for (const g of pieces.values()) g.userData.body.position.y = g.userData.h / 2 - .03 + Math.sin(t * 1.6 + g.position.x * 2 + g.position.z) * .018;
+    // the grade follows the glass as it turns, at any frame rate
     final.uniforms.time.value = t; final.uniforms.punch.value = fx.punch; final.uniforms.hurt.value = fx.hurt; final.uniforms.flash.value = fx.flash;
-    final.uniforms.dark.value += ((flipped ? 1 : 0) - final.uniforms.dark.value) * .08; bloom.strength = .14 + final.uniforms.dark.value * .3; bloom.threshold = .9 - final.uniforms.dark.value * .25;
+    final.uniforms.dark.value = (1 - Math.cos(world.rotation.z)) / 2; bloom.strength = .14 + final.uniforms.dark.value * .3; bloom.threshold = .9 - final.uniforms.dark.value * .25;
     composer.render(); requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
-  return { load, paint, flip, animate, pick, resize, get busy() { return busy > 0; } };
+  return { load, paint, flip, animate, pick, pickPiece, project, cursor, setSafe, resize, view, quality, get busy() { return busy > 0; } };
 }
