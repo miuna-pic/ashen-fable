@@ -115,7 +115,7 @@ body.mirror #cutin { background: #0a0508; border-color: var(--blood); }
   #dialog[data-who=b] > div, #dialog[data-who=shadow] > div, #dialog[data-who=queen] > div { box-shadow: 6px 6px 0 var(--blood); }
   #dialog p { font-size: 14px; line-height: 1.55; min-height: 3.1em; }
   #dialog b { top: -16px; left: 10px; font-size: 13px; padding: 2px 12px; } #dialog div i { right: 10px; bottom: 6px; font-size: 10px; }
-  #dialog img { height: 84vh; max-width: calc(var(--gap, 28vw) + 24px); object-fit: contain; object-position: left bottom; }
+  #dialog img { left: 0; height: 84vh; max-width: var(--gap, 28vw); object-fit: contain; object-position: center bottom; } #dialog[data-who=b] img, #dialog[data-who=shadow] img { right: 0; }
   #banner::before { height: 20vh; } #banner b { font-size: 11vh; }
   #title h1 { font-size: clamp(48px, 19vh, 130px); top: 7vh; } #title .tag { bottom: 31vh; font-size: 13px; line-height: 1.7; } #begin { bottom: 13vh; font-size: 20px; padding: 9px 42px; } #title small { bottom: 10px; }
 }
