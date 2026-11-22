@@ -116,9 +116,22 @@ export function createScenery(world) {
         vec2 d = abs(f - o) - .5; float sd = length(max(d, 0.)) + min(max(d.x, d.y), 0.);
         hole = max(hole, -sd);
       }
-      float inside = hole + (noise(g * 9.) - .5) * .09 + (noise(g * 23.) - .5) * .04;
-      if (inside > 0.) { if (side > 0.) discard; gl_FragColor = vec4(.012, .0, .006, .93); return; }   // from below, the daylight in a hole is dimmed
-      float rimHole = smoothstep(-.13, 0., inside);
+      // the break is cut in straight shards, not eaten away: two crossed sawtooths give it facets
+      float zig = abs(fract((g.x + g.y) * 2.5 + .2) - .5) + abs(fract((g.x - g.y) * 1.7 + .6) - .5);
+      float inside = hole + (zig - .5) * .11 - .02;
+      if (inside > 0.) {
+        // a well into the other world: the cut face of the glass, then the far sky pooling below
+        float aw = fwidth(inside), face = 1. - smoothstep(.045, .045 + aw, inside), lip = 1. - smoothstep(.0, aw * 1.5, inside - .045);
+        float depth = smoothstep(.05, .5, inside), swirl = noise(g * 3. + vec2(time * .12, -time * .07));
+        vec3 cutA = mix(vec3(.62, .80, 1.), vec3(.20, .30, .72), smoothstep(0., .045, inside));        // surface: pale blue glass edge
+        vec3 cutB = mix(vec3(1., .30, .34), vec3(.30, .02, .07), smoothstep(0., .045, inside));        // mirror: ember edge
+        vec3 wellA = mix(vec3(.16, .05, .22), vec3(.05, .0, .04), depth) + vec3(.55, .04, .12) * swirl * depth * .5;   // looking down: dusk, then the red of the mirror
+        vec3 wellB = mix(vec3(.50, .56, .92), vec3(.96, .90, .98), depth) * (.75 + .25 * swirl);                        // looking up: daylight
+        vec3 well = side > 0. ? wellA : wellB, cutc = side > 0. ? cutA : cutB;
+        vec3 colh = mix(well, cutc, face) + (side > 0. ? vec3(.5, .6, 1.) : vec3(1., .25, .3)) * lip * .35;
+        gl_FragColor = vec4(colh, 1.); return;
+      }
+      float rimHole = smoothstep(-.035, 0., inside);
 
       float edge = max(abs(f.x), abs(f.y)), aa = fwidth(g.x) + fwidth(g.y);
       float line = smoothstep(.5 - .018 - aa, .5 - .018, edge);
@@ -138,14 +151,14 @@ export function createScenery(world) {
         col = mix(base, sky, .16 + .5 * fr); a = mix(.90, .84, chk);
         col = mix(col, vec3(.99, .80, .42), max(max(line, stud), inlay * .7));
         a = mix(a, 1., max(line, stud));
-        col += vec3(1., .86, .5) * rimHole * .9;
+        col = mix(col, vec3(.99, .82, .45), rimHole);   // a gilt lip where the glass broke
       } else {
         vec3 base = mix(vec3(.20, .012, .035), vec3(.028, .014, .03), chk);
         base = mix(base, base * 1.5 + vec3(.05, 0., .01), vein * .5);
         col = mix(base, sky * 1.2, .08 + .5 * fr); a = mix(.95, .90, chk);
         col = mix(col, vec3(.95, .12, .18), max(line, stud) * .9 + inlay * .45);
         a = mix(a, 1., max(line, stud));
-        col += vec3(1., .2, .22) * rimHole * 1.1;
+        col = mix(col, vec3(1., .22, .24), rimHole);
       }
       col *= 1. - bevel * .10;
       float gl = step(abs(c.x - goal.x) + abs(c.y - goal.y), .1) * (1. - smoothstep(.1, .5, edge) * .6) * (.55 + .45 * sin(time * 3.));

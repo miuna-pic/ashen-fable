@@ -89,6 +89,7 @@ export function createStage(canvas) {
 
   // Pieces are standees: face 0 stands on the glass, face 1 hangs beneath it.
   const pieces = new Map(); const textures = {};
+  const hash = (n) => { const v = Math.sin(n * 127.1 + 3.7) * 43758.5453; return v - Math.floor(v); };
   function standee(name, face) {
     textures[name] ||= tex(name);
     const h = HEIGHT[name] || 1.34, g = new T.Group(), body = new T.Mesh(plane, new T.MeshBasicMaterial({ map: textures[name], transparent: true, alphaTest: .35, side: T.DoubleSide, toneMapped: false }));
@@ -108,7 +109,15 @@ export function createStage(canvas) {
     clear(); state = st;
     alice = [standee('alice_a', 0), standee('alice_b', 1)]; alice.forEach((g) => g.position.copy(local(st.alice)));
     for (const e of st.enemies) { const g = standee(KINDS[e.kind].key, e.face); g.position.copy(local(e.at)); pieces.set(e.id, g); }
-    for (const c of st.corpses) for (const face of [0, 1]) { const g = standee('alice_a', face); g.position.copy(local(c)); const b = g.userData.body; b.material.color.set(face ? '#7a0d1c' : '#3b3340'); g.userData.far.uniforms.tint.value.copy(b.material.color); b.rotation.z = 1.25; b.scale.multiplyScalar(.8); b.position.set(.1, .34, 0); corpses.push(g); }
+    // A body left behind lies where it fell: flat on its square in a pool of ink, on both faces of the glass.
+    for (const c of st.corpses) for (const face of [0, 1]) {
+      const g = standee('alice_a', face), u = g.userData, b = u.body, turn = (hash(c * 7 + 3) - .5) * .9 + (hash(c) > .5 ? Math.PI / 2 : -Math.PI / 2);
+      u.flat = true; u.tilt.rotation.x = 0; u.tilt.scale.setScalar(1);
+      b.material.color.set(face ? '#d99aa6' : '#cfc6e6'); u.far.uniforms.tint.value.set(face ? '#8a5560' : '#8f86ad');
+      b.rotation.set(-Math.PI / 2, 0, turn); b.scale.multiplyScalar(.74); b.position.set(0, .03, 0);
+      u.shade.material.color.set(face ? '#000000' : '#2a0b2e'); u.shade.material.opacity = .92; u.shade.scale.setScalar(1.25); u.shade.position.y = .012;
+      g.position.copy(local(c)); corpses.push(g);
+    }
     scenery.setBoard(st); order(flipped);
     tiles.forEach((pair, s) => pair.forEach((f) => { f.goal.visible = s === st.goal; f.goal.material.map = GLYPH.goal; f.goal.material.color.set('#ffd774'); f.goal.material.opacity = .95; }));
   }
@@ -242,7 +251,7 @@ export function createStage(canvas) {
     const b = box(hi);
     return { pitch: view.pitch, d: hi, tile: tileAt(0, w, h), far: tileAt(.5 - H / 2, w, h), deep: px(0, 0, 1 - H / 2, w, h)[1] - px(0, 0, -H / 2, w, h)[1], ox: (b.x0 + b.x1) / 4 * w - (s.l + fw / 2 - w / 2), oy: -(b.y0 + b.y1) / 4 * h - (s.t + fh / 2 - h / 2) };
   }
-  const restyle = (g) => { g.userData.tilt.rotation.x = .16 - view.lean; g.userData.tilt.scale.setScalar(view.scale); };
+  const restyle = (g) => { if (g.userData.flat) return; g.userData.tilt.rotation.x = .16 - view.lean; g.userData.tilt.scale.setScalar(view.scale); };
   function fit() {
     const w = canvas.clientWidth, h = canvas.clientHeight; if (!w || !h) return;
     camera.clearViewOffset(); camera.aspect = w / h; portrait = w / h < .8;
