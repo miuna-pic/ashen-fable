@@ -211,6 +211,8 @@ export function createStage(canvas) {
   const px = (x, y, z, w, h) => { projected.set(x, y, z).project(camera); return [(projected.x + 1) / 2 * w, (1 - projected.y) / 2 * h]; };
   const tileAt = (z, w, h) => px(.5, 0, z, w, h)[0] - px(-.5, 0, z, w, h)[0];
   // The cinematic framing: tilt down, then pull back, until the near edge of the board clears the flip button.
+  // how many pixels deep the far row has to be before a finger (or a mouse) hits it reliably
+  const DEEP = matchMedia('(pointer: coarse)').matches ? 34 : 22;
   function frameCine(w, h) {
     const c = portrait ? TALL : CAM; camera.fov = c.fov; camera.updateProjectionMatrix();
     const hud = document.getElementById('flip')?.getBoundingClientRect(), limit = (hud && hud.height ? hud.top : h) - 6;
@@ -224,12 +226,12 @@ export function createStage(canvas) {
     for (const x of [-W / 2, W / 2]) for (const z of [-H / 2, H / 2]) { const q = px(x, 0, z, w, h); xs.push(q[0]); ys.push(q[1]); }
     const inside = view.safe.some((s) => Math.min(...xs) >= s.l && Math.max(...xs) <= w - s.r && Math.min(...ys) >= s.t && Math.max(...ys) <= h - s.b);
     const deep = px(0, 0, 1 - H / 2, w, h)[1] - px(0, 0, -H / 2, w, h)[1];
-    return { ok: inside && far >= 46 && deep >= 30, pitch: c.pitch, tile: tileAt(0, w, h), far };
+    return { ok: inside && far >= 46 && deep >= DEEP, pitch: c.pitch, tile: tileAt(0, w, h), far };
   }
   // The fitted framing: try every free rectangle the HUD offers and keep the one that shows the largest squares.
   function frameIn(s, w, h) {
     let best = null; // a square is as easy to hit as its far row is wide and deep; a steep camera shows less of the figures' faces, so it has to earn its pitch
-    for (let p = .44; p < 1.08; p += .04) { view.pitch = p; const f = frameAt(s, w, h); f.score = Math.min(f.far, f.deep * 1.5) * (1 - .15 * Math.max(0, p - .52)); if (!best || f.score > best.score) best = f; }
+    for (let p = .44; p < 1.08; p += .04) { view.pitch = p; const f = frameAt(s, w, h); f.score = f.far * Math.min(1, f.deep / DEEP) * (1 - .15 * Math.max(0, p - .52)); if (!best || f.score > best.score) best = f; }
     return best;
   }
   function frameAt(s, w, h) {
