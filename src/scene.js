@@ -283,7 +283,7 @@ export function createScene(canvas) {
   const home = new THREE.Vector3();
   const forced = new URLSearchParams(location.search).get('q');
   let quality = forced == null ? 0 : Math.max(0, Math.min(2, +forced || 0));
-  let slow = 0, sampled = 0, fpsN = 0, fpsT = 0, fpsEl = null;
+  let slow = 0, sampled = 0, fpsN = 0, fpsT = 0, fpsLast = performance.now(), fpsEl = null;
   if (new URLSearchParams(location.search).has('fps')) {
     fpsEl = document.createElement('div');
     fpsEl.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:20;font:12px monospace;color:#8fe3ff;background:rgba(0,0,0,.6);padding:2px 6px;pointer-events:none';
@@ -396,7 +396,7 @@ export function createScene(canvas) {
   let time = 0;
   function frame() {
     const dt = Math.min(clock.getDelta(), 0.1); time += dt;
-    if (fpsEl) { fpsN++; fpsT += dt; if (fpsT >= 1) { fpsEl.textContent = `${Math.round(fpsN / fpsT)} fps · 画质 ${quality}`; fpsN = 0; fpsT = 0; } }
+    if (fpsEl) { const now = performance.now(); fpsN++; fpsT += (now - fpsLast) / 1000; fpsLast = now; if (fpsT >= 1) { fpsEl.textContent = `${Math.round(fpsN / fpsT)} fps · 画质 ${quality}`; fpsN = 0; fpsT = 0; } }
     for (let k = tweens.length - 1; k >= 0; k--) {
       const t = tweens[k]; t.t += dt * 1000; const q = Math.min(1, t.t / t.ms); t.fn(q);
       if (q >= 1) { tweens.splice(k, 1); t.res(); }
