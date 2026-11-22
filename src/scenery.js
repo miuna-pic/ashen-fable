@@ -281,29 +281,31 @@ export function createScenery(world) {
     [[0, .32], [.07, .32], [.11, .2], [.3, .13], [.5, .1], [.54, .2], [.58, .1], [.66, .2], [.8, .22], [.92, .16], [1, 0]],                                          // pawn
   ];
   const tower = (profile, dark) => {
-    const c = document.createElement('canvas'); c.width = 160; c.height = 512; const g = c.getContext('2d'), X0 = 80, Y0 = 512;
-    g.beginPath(); profile.forEach(([y, w], i) => g[i ? 'lineTo' : 'moveTo'](X0 + w * 240, Y0 - y * 500)); [...profile].reverse().forEach(([y, w]) => g.lineTo(X0 - w * 240, Y0 - y * 500)); g.closePath();
-    const body = g.createLinearGradient(0, 0, 160, 0);
+    const c = document.createElement('canvas'); c.width = 256; c.height = 512; const g = c.getContext('2d'), X0 = 128, Y0 = 512;
+    g.beginPath(); profile.forEach(([y, w], i) => g[i ? 'lineTo' : 'moveTo'](X0 + w * 340, Y0 - y * 500)); [...profile].reverse().forEach(([y, w]) => g.lineTo(X0 - w * 340, Y0 - y * 500)); g.closePath();
+    const body = g.createLinearGradient(20, 0, 236, 0);
     if (dark) { body.addColorStop(.2, '#7a0f1f'); body.addColorStop(.42, '#1a050c'); body.addColorStop(.6, '#240710'); body.addColorStop(.8, '#e02038'); }
     else { body.addColorStop(.2, '#fffaf7'); body.addColorStop(.5, '#d6bfee'); body.addColorStop(.8, '#5d5fc0'); }
     g.fillStyle = body; g.fill(); g.save(); g.clip(); g.lineWidth = 6; g.strokeStyle = dark ? '#ff2a40' : '#4a41a8'; g.stroke();
     g.fillStyle = dark ? '#ff2a40' : '#d9a441';   // lit windows up the shaft
-    for (let i = 0; i < 4; i++) g.fillRect(X0 - 3 + (i % 2 ? 7 : -7), Y0 - 150 - i * 46, 6, 14);
-    g.globalCompositeOperation = 'destination-out'; const fade = g.createLinearGradient(0, Y0, 0, Y0 - 70); fade.addColorStop(0, '#000'); fade.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = fade; g.fillRect(0, Y0 - 70, 160, 70);   // the foot is lost in sea mist
+    for (let i = 0; i < 5; i++) g.fillRect(X0 - 4 + (i % 2 ? 11 : -11), Y0 - 130 - i * 40, 8, 18);
+    g.globalAlpha = .28; g.fillStyle = dark ? '#000' : '#3a3594'; for (let y = 60; y < 500; y += 46) g.fillRect(0, Y0 - y, 256, 5);   // courses of stone
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = 'destination-out'; const fade = g.createLinearGradient(0, Y0, 0, Y0 - 70); fade.addColorStop(0, '#000'); fade.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = fade; g.fillRect(0, Y0 - 70, 256, 70);   // the foot is lost in sea mist
     g.restore();
-    if (dark) { g.globalCompositeOperation = 'destination-out'; g.beginPath(); g.moveTo(40, 0); g.lineTo(110, 0); g.lineTo(96, 40); g.lineTo(84, 22); g.lineTo(70, 52); g.closePath(); g.fill(); }   // the mirror's towers are broken off
+    if (dark) { g.globalCompositeOperation = 'destination-out'; g.beginPath(); g.moveTo(60, 0); g.lineTo(190, 0); g.lineTo(160, 44); g.lineTo(136, 24); g.lineTo(108, 58); g.closePath(); g.fill(); }   // the mirror's towers are broken off
     const t = new T.CanvasTexture(c); t.colorSpace = T.SRGBColorSpace; t.anisotropy = 4; return t;
   };
   const haze0 = (r) => (r - 13) / 9 * 1.3;   // farther ones are taller, so they read at the same size and differ only in drift
   const towerGeo = new T.PlaneGeometry(1, 1).translate(0, .5, 0);
   const towers = [1, -1].map((side) => {
     const g = new T.Group(), maps = PROFILES.map((p) => tower(p, side < 0));
-    for (let i = 0; i < 11; i++) {
-      const az = (i - 5) * .2 + (hash1(i + 40) - .5) * .12, r = 13 + hash1(i + 50) * 9, h = 1.5 + hash1(i + 60) * 1.5 + haze0(r);
-      if (i === 5) continue;   // leave the castle a clear view down the middle
+    for (let i = 0; i < 9; i++) {
+      const az = (i - 4) * .25 + (hash1(i + 40) - .5) * .1, r = 13 + hash1(i + 50) * 9, h = 1.9 + hash1(i + 60) * 1.3 + haze0(r) * 1.1;
+      if (i === 4) continue;   // leave the castle a clear view down the middle
       const haze = (r - 13) / 9;   // far ones sink into the sky's colour
       const m = new T.Mesh(towerGeo, new T.MeshBasicMaterial({ map: maps[i % maps.length], transparent: true, depthWrite: false, toneMapped: false, side: T.DoubleSide, opacity: 1 - haze * .3, color: side > 0 ? new T.Color(1, 1 - haze * .06, 1) : new T.Color(1 + haze, .6 + haze * .4, .6 + haze * .4) }));
-      m.position.set(Math.sin(az) * r, 0, -Math.cos(az) * r); m.scale.set(h * .3125, h * side, 1); m.rotation.y = -az; m.renderOrder = -8 + haze * -1; g.add(m);
+      m.position.set(Math.sin(az) * r, 0, -Math.cos(az) * r); m.scale.set(h * .5, h * side, 1); m.rotation.y = -az; m.renderOrder = -8 + haze * -1; g.add(m);
     }
     world.add(g); return g;
   });
